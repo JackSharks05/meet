@@ -1,0 +1,74 @@
+# meet — home-server stack: MongoDB + two API listeners (public + admin).
+# Build context is the repo root so the image can access ./server.
+# Run from this directory: `docker compose up --build` (reads deploy/.env).
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - meet-mongo-data:/data/db
+    # Not published to the host — only reachable on the internal compose network.
+
+  server-public:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      MODE: public
+      PORT: "3002"
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB: ${MONGO_DB:-meet}
+      SESSION_SECRET: ${SESSION_SECRET}
+      # Origins allowed to call the public API (the Vercel site):
+      CORS_ORIGINS: ${PUBLIC_CORS_ORIGINS:-http://localhost:5173}
+      LISTMONK_ENABLED: "false"
+    ports:
+      # localhost only → Cloudflare Tunnel forwards api.meet.jackdehaan.com here
+      - "127.0.0.1:3002:3002"
+
+  server-admin:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      MODE: admin
+      PORT: "3002"
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB: ${MONGO_DB:-meet}
+      SESSION_SECRET: ${SESSION_SECRET}
+      # Origins allowed to call the admin API (your tailnet admin UI):
+      CORS_ORIGINS: ${ADMIN_CORS_ORIGINS:-http://localhost:5173}
+      LISTMONK_ENABLED: "false"
+      # Only these emails may sign in (and thus create/manage events). Comma-
+      # separated; leave empty for no restriction. Defense-in-depth on top of
+      # the tailnet-only binding above.
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      # Google OAuth (operator calendar sync) — reuse Mensa's Google Cloud project:
+      CLIENT_ID: ${CLIENT_ID:-}
+      CLIENT_SECRET: ${CLIENT_SECRET:-}
+      SERVICE_ACCOUNT_KEY_PATH: ${SERVICE_ACCOUNT_KEY_PATH:-}
+    ports:
+      # localhost only → admin API (also proxied same-origin by admin-web below)
+      - "127.0.0.1:3003:3002"
+
+  # Admin UI: serves the create/summary SPA + same-origin /api proxy to
+  # server-admin. Expose to your devices with `tailscale serve` (Phase 6).
+  admin-web:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - server-admin
+    ports:
+      - "127.0.0.1:8081:80"
+
+volumes:
+  meet-mongo-data:
