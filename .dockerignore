@@ -1,0 +1,8 @@
+# Keep the Docker build context small + secret-free
+**/node_modules
+frontend/dist
+**/*.log
+.git
+deploy/.env
+.env
+**/.DS_Store

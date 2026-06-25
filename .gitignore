@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Secrets / environment (templates are tracked; real env files are not)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+deploy/.env
+deploy/cloudflared/*.json
+deploy/cloudflared/cert.pem
+
+# Builds / artifacts
+frontend/dist/
+server/server
+server/main
+*.test
+
+# Logs
+logs.log
+*.log
+
+# Tooling / OS
+.vercel/
+.DS_Store

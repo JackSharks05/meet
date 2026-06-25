@@ -1,0 +1,47 @@
+NOTICE
+======
+
+This product, "meet" (deployed at https://meet.jackdehaan.com), is a modified
+version of Timeful — a free, open-source group-availability scheduling app.
+
+  Upstream project : Timeful, by schej-it
+  Upstream source  : https://github.com/schej-it/timeful.app
+  Forked at commit : 84fb9bd76c591ebd4504060f5cd7c607f55b0c42 (2026-02-03)
+  License          : GNU Affero General Public License v3.0 (AGPL-3.0)
+
+  Copyright (C) the Timeful / schej-it authors (original work).
+  Copyright (C) 2026 Jack de Haan (modifications).
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. See the LICENSE file for the full text.
+
+As required by AGPL-3.0 section 13, every user who interacts with this software
+over a network is offered the complete corresponding source code of the running
+version. The source for this deployment is published at:
+
+    https://github.com/JackSharks05/meet
+
+Summary of modifications made in this fork
+-------------------------------------------
+This fork adapts Timeful for private, single-operator use. Notable changes
+(some in progress) include:
+
+  * Removed: Stripe/billing, Discord & Slack bots, friends, availability
+    groups, contacts/directory features, third-party analytics
+    (PostHog/GTM), and the email/Listmonk reminder system.
+  * Event creation, editing, and summaries are restricted to the operator and
+    served only over a private Tailscale network; the public site at
+    meet.jackdehaan.com is response-only.
+  * Backend runs as Go + MongoDB in Docker, exposed publicly via Cloudflare
+    Tunnel (poll/respond API only), with a static frontend on Vercel.
+  * Google Calendar integration is operator-only.
+  * Re-themed to a dark visual style.
+
+Individual modified source files carry a notice indicating that they were
+changed and the date of change, per AGPL-3.0 section 5(a).
+
+Trademark note: "Timeful" and the Timeful logo are brand assets of the upstream
+project and are not licensed under the AGPL. This fork does not use the Timeful
+name or logo as its own branding; the references above are for attribution only.
