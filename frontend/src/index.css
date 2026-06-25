@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Modified by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+   Dark theme inspired by jacksharks05.github.io (black + purple/red light
+   pillar, glassy cards, Spectral serif). Availability green/yellow kept. */
+:root {
+  --jdh-bg: #000000;
+  --jdh-card: rgba(10, 14, 28, 0.6);
+  --jdh-card-solid: #0a0e1c;
+  --jdh-outline: rgba(98, 31, 109, 0.92); /* purple #621F6D */
+  --jdh-accent: rgba(254, 0, 0, 0.32); /* red #FE0000 */
+  --jdh-magenta: rgba(200, 0, 255, 0.77);
+  --jdh-text: rgba(255, 255, 255, 0.92);
+  --jdh-muted: rgba(255, 255, 255, 0.72);
+  --jdh-faint: rgba(255, 255, 255, 0.14);
+  --jdh-link: rgba(140, 190, 255, 0.95);
+}
+
+html,
+body {
+  background: var(--jdh-bg);
+  color: var(--jdh-text);
+}
+
+body,
+#app {
+  font-family: "Spectral", ui-serif, Georgia, "Times New Roman", Times, serif;
+}
+
+a {
+  color: var(--jdh-link);
+}
+
+/* Let the LightPillar backdrop show through Vuetify's app surface */
+.v-application,
+.theme--dark.v-application,
+.v-application .v-main {
+  background: transparent !important;
+}
+
+/* Reusable glassy card surface (jacksharks05 .page__card) */
+.jdh-card {
+  border: 1px solid var(--jdh-outline);
+  background: var(--jdh-card);
+  backdrop-filter: blur(10px);
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* --- Dark-surface remap of Timeful's light utility classes ---
+   Timeful was built light-first; these utilities are its surfaces / text / borders.
+   In the dark theme we remap them to dark equivalents. Scoped under .v-application
+   so they out-specify the bare `tw-*` utilities (which carry !important). The
+   availability colors (green/yellow) are applied separately and are untouched. */
+.v-application .tw-bg-white {
+  background-color: var(--jdh-card-solid) !important;
+}
+.v-application .tw-bg-off-white {
+  background-color: #0c1120 !important;
+}
+.v-application .tw-bg-light-gray {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+.v-application .tw-text-black {
+  color: var(--jdh-text) !important;
+}
+.v-application .tw-text-very-dark-gray {
+  color: var(--jdh-muted) !important;
+}
+.v-application .tw-text-dark-gray {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+.v-application .tw-border-light-gray-stroke,
+.v-application .tw-border-light-gray,
+.v-application .tw-border-gray {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* The selection UI (the ScheduleOverlap calendar) is a LIGHT island within the
+   otherwise-dark app — it renders in Timeful's original light theme for
+   legibility, as a white card floating on the dark page. */
+.jdh-light-zone {
+  background-color: #fff;
+  color: rgba(0, 0, 0, 0.87);
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+/* Undo the dark-surface remap inside the light zone (restore Timeful values). */
+.v-application .jdh-light-zone .tw-bg-white {
+  background-color: #fff !important;
+}
+.v-application .jdh-light-zone .tw-bg-off-white {
+  background-color: #f2f2f2 !important;
+}
+.v-application .jdh-light-zone .tw-bg-light-gray {
+  background-color: #f3f4f6 !important;
+}
+.v-application .jdh-light-zone .tw-text-black {
+  color: #000 !important;
+}
+.v-application .jdh-light-zone .tw-text-very-dark-gray {
+  color: #4f4f4f !important;
+}
+.v-application .jdh-light-zone .tw-text-dark-gray {
+  color: #6b6b6b !important;
+}
+.v-application .jdh-light-zone .tw-border-light-gray-stroke,
+.v-application .jdh-light-zone .tw-border-light-gray,
+.v-application .jdh-light-zone .tw-border-gray {
+  border-color: #dfdfdf !important;
+}
+
+/* Thin, subtle scrollbars on the dark surface */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+}
