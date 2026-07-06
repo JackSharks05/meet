@@ -22,15 +22,6 @@
       <p class="jdh-landing__sub">
         Have a group poll link? Open it to mark when you're free.
       </p>
-      <div class="jdh-landing__rule"></div>
-      <a
-        class="jdh-landing__src"
-        href="https://github.com/JackSharks05/meet"
-        target="_blank"
-        rel="noopener"
-      >
-        Open source (AGPL-3.0) — view the source
-      </a>
     </div>
   </div>
 </template>
