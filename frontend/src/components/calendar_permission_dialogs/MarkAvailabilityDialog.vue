@@ -16,54 +16,59 @@
             You can always manually edit after autofilling
           </div>
           <div class="tw-flex tw-flex-col tw-gap-2">
-            <v-btn block @click="autofillWithGcal" class="tw-bg-white">
-              <div class="tw-flex tw-w-full tw-items-center tw-gap-2">
-                <v-img
-                  class="tw-flex-initial"
-                  width="20"
-                  height="20"
-                  src="@/assets/google_logo.svg"
-                />
-                <v-spacer />
-                Autofill with Google Calendar
-                <v-spacer />
+            <!-- Calendar autofill needs Google/Apple/Outlook OAuth, which only the
+                 operator's admin build has. On the public build these are hidden
+                 so guests aren't offered a flow that can't complete. -->
+            <template v-if="isAdminBuild">
+              <v-btn block @click="autofillWithGcal" class="tw-bg-white">
+                <div class="tw-flex tw-w-full tw-items-center tw-gap-2">
+                  <v-img
+                    class="tw-flex-initial"
+                    width="20"
+                    height="20"
+                    src="@/assets/google_logo.svg"
+                  />
+                  <v-spacer />
+                  Autofill with Google Calendar
+                  <v-spacer />
+                </div>
+              </v-btn>
+              <v-btn block @click="autofillWithApple" class="tw-bg-white">
+                <div class="tw-flex tw-w-full tw-items-center tw-gap-2">
+                  <v-img
+                    class="tw-flex-initial"
+                    width="20"
+                    height="20"
+                    src="@/assets/apple_logo.svg"
+                  />
+                  <v-spacer />
+                  Autofill with Apple Calendar
+                  <v-spacer />
+                </div>
+              </v-btn>
+              <v-btn block @click="autofillWithOutlook" class="tw-bg-white">
+                <div class="tw-flex tw-w-full tw-items-center tw-gap-2">
+                  <v-img
+                    class="tw-flex-initial"
+                    width="20"
+                    height="20"
+                    src="@/assets/outlook_logo.svg"
+                  />
+                  <v-spacer />
+                  Autofill with Outlook Calendar
+                  <v-spacer />
+                </div>
+              </v-btn>
+              <div class="tw-flex tw-items-center tw-gap-3">
+                <v-divider />
+                <div
+                  class="tw-text-center tw-text-xs tw-font-medium tw-text-dark-gray"
+                >
+                  or
+                </div>
+                <v-divider />
               </div>
-            </v-btn>
-            <v-btn block @click="autofillWithApple" class="tw-bg-white">
-              <div class="tw-flex tw-w-full tw-items-center tw-gap-2">
-                <v-img
-                  class="tw-flex-initial"
-                  width="20"
-                  height="20"
-                  src="@/assets/apple_logo.svg"
-                />
-                <v-spacer />
-                Autofill with Apple Calendar
-                <v-spacer />
-              </div>
-            </v-btn>
-            <v-btn block @click="autofillWithOutlook" class="tw-bg-white">
-              <div class="tw-flex tw-w-full tw-items-center tw-gap-2">
-                <v-img
-                  class="tw-flex-initial"
-                  width="20"
-                  height="20"
-                  src="@/assets/outlook_logo.svg"
-                />
-                <v-spacer />
-                Autofill with Outlook Calendar
-                <v-spacer />
-              </div>
-            </v-btn>
-            <div class="tw-flex tw-items-center tw-gap-3">
-              <v-divider />
-              <div
-                class="tw-text-center tw-text-xs tw-font-medium tw-text-dark-gray"
-              >
-                or
-              </div>
-              <v-divider />
-            </div>
+            </template>
             <v-btn @click="setAvailabilityManually" block>Manually</v-btn>
           </div>
         </div>
@@ -132,6 +137,10 @@ export default {
     ...mapState(["authUser"]),
     isPhone() {
       return isPhone(this.$vuetify)
+    },
+    // Operator's tailnet-only build; only it has calendar OAuth for autofill.
+    isAdminBuild() {
+      return process.env.VUE_APP_ADMIN === "true"
     },
   },
 

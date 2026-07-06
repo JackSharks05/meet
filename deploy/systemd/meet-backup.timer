@@ -1,0 +1,11 @@
+# Added by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+# Runs meet-backup.service daily at 03:30 (with catch-up if the box was asleep).
+[Unit]
+Description=meet — daily MongoDB backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

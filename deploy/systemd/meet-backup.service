@@ -1,0 +1,22 @@
+# Added by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+# One-shot MongoDB backup, driven by meet-backup.timer. See backup-mongo.sh.
+#
+# Install:
+#   sudo cp meet-backup.service meet-backup.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now meet-backup.timer
+# Set offsite/retention by editing the Environment= lines below.
+[Unit]
+Description=meet — MongoDB backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=jdh
+WorkingDirectory=/home/jdh/meet/deploy
+# Uncomment / edit to customise:
+# Environment=MEET_BACKUP_DIR=/home/jdh/meet-backups
+# Environment=MEET_BACKUP_KEEP_DAYS=14
+# Environment=MEET_BACKUP_RCLONE_REMOTE=gdrive:meet-backups
+ExecStart=/home/jdh/meet/deploy/backup-mongo.sh

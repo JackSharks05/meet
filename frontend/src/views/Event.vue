@@ -599,8 +599,13 @@ export default {
         if (!this.userHasResponded && !this.isSignUp) {
           this.scheduleOverlapComponent.setAvailabilityAutomatically()
         }
-      } else {
+      } else if (this.isAdminBuild) {
+        // Operator (admin build) can autofill from a connected calendar.
         this.choiceDialog = true
+      } else {
+        // Public build: guests have no calendar OAuth, so the autofill options
+        // don't work. Skip the choice dialog and go straight to manual entry.
+        this.setAvailabilityManually()
       }
     },
     /** Add guest availability while signed in */
