@@ -26,6 +26,16 @@ services:
       # Origins allowed to call the public API (the Vercel site):
       CORS_ORIGINS: ${PUBLIC_CORS_ORIGINS:-http://localhost:5173}
       LISTMONK_ENABLED: "false"
+      # Public site base for links in emails + SMTP for operator notifications.
+      # Respondents submit through THIS listener, so it sends the "someone
+      # responded" mail. All optional — empty SMTP = no-op (like listmonk).
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://meet.jackdehaan.com}
+      OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     ports:
       # localhost only → Cloudflare Tunnel forwards meet-api.jackdehaan.com here
       - "127.0.0.1:3002:3002"
@@ -54,6 +64,15 @@ services:
       CLIENT_ID: ${CLIENT_ID:-}
       CLIENT_SECRET: ${CLIENT_SECRET:-}
       SERVICE_ACCOUNT_KEY_PATH: ${SERVICE_ACCOUNT_KEY_PATH:-}
+      # Public site base for links in emails + SMTP (the operator's own auto-fill
+      # from Mensa runs through this listener). All optional — empty SMTP = no-op.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://meet.jackdehaan.com}
+      OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     ports:
       # localhost only → admin API (also proxied same-origin by admin-web below)
       - "127.0.0.1:3003:3002"

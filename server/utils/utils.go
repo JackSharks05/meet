@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/brianvoe/sjwt"
@@ -113,15 +114,18 @@ func PrintHttpResponse(resp *http.Response) {
 	resp.Body = io.NopCloser(bytes.NewBuffer(body))
 }
 
-// Returns the correct base url, based on whether we're on dev or prod
+// Returns the correct base url for building public poll links (e.g. in emails).
+// Modified by Jack de Haan, 2026 (meet fork of Timeful): the public site is
+// configurable via PUBLIC_BASE_URL and defaults to the meet domain rather than
+// timeful.app.
 func GetBaseUrl() string {
-	var baseUrl string
-	if IsRelease() {
-		baseUrl = "https://timeful.app"
-	} else {
-		baseUrl = "http://localhost:8080"
+	if url := strings.TrimSpace(os.Getenv("PUBLIC_BASE_URL")); url != "" {
+		return strings.TrimRight(url, "/")
 	}
-	return baseUrl
+	if IsRelease() {
+		return "https://meet.jackdehaan.com"
+	}
+	return "http://localhost:8080"
 }
 
 // Returns the value of the first non nil pointer in `args`.

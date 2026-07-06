@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"schej.it/server/db"
 	"schej.it/server/errs"
 	"schej.it/server/logger"
@@ -18,6 +19,7 @@ import (
 	"schej.it/server/models"
 	"schej.it/server/responses"
 	"schej.it/server/services/calendar"
+	emailsvc "schej.it/server/services/email"
 	"schej.it/server/services/gcloud"
 	"schej.it/server/services/listmonk"
 	"schej.it/server/utils"
@@ -50,10 +52,13 @@ func InitEvents(router *gin.RouterGroup, admin bool) {
 	// listener is never exposed publicly) rather than a session. createEvent
 	// already handles the no-session case (owner is left unset).
 	eventRouter.POST("", createEvent)
+	// List/delete are auth-free on the admin listener (tailnet-protected) so the
+	// operator can manage their Mensa-created events, which have no owner session.
+	eventRouter.GET("", listOperatorEvents)
+	eventRouter.DELETE("/:eventId", deleteOperatorEvent)
 	eventRouter.PUT("/:eventId", middleware.AuthRequired(), editEvent)
 	eventRouter.POST("/:eventId/decline", middleware.AuthRequired(), declineInvite)
 	eventRouter.GET("/:eventId/calendar-availabilities", middleware.AuthRequired(), getCalendarAvailabilities)
-	eventRouter.DELETE("/:eventId", middleware.AuthRequired(), deleteEvent)
 	eventRouter.POST("/:eventId/duplicate", middleware.AuthRequired(), duplicateEvent)
 	eventRouter.POST("/:eventId/archive", middleware.AuthRequired(), archiveEvent)
 }
@@ -156,13 +161,22 @@ func createEvent(c *gin.Context) {
 			ownerName = "Somebody"
 		}
 
-		// Schedule email reminders for each of the remindees' emails
+		// Email each invitee the poll link so they can add their availability.
+		// (Timeful scheduled these via Cloud Tasks; this fork sends immediately
+		// over SMTP. "Responded" is tracked so the operator can see who's left.)
+		eventUrl := fmt.Sprintf("%s/e/%s", utils.GetBaseUrl(), event.GetId())
+		subject := fmt.Sprintf("%s wants your availability: %s", ownerName, payload.Name)
+		body := emailsvc.SimpleBody(
+			"",
+			fmt.Sprintf("%s invited you to fill out your availability for <b>%s</b>.", ownerName, payload.Name),
+			eventUrl,
+			"Add your availability",
+		)
 		remindees := make([]models.Remindee, 0)
 		for _, email := range payload.Remindees {
-			taskIds := gcloud.CreateEmailTask(email, ownerName, payload.Name, event.GetId())
+			go emailsvc.Send(email, subject, body)
 			remindees = append(remindees, models.Remindee{
 				Email:     email,
-				TaskIds:   taskIds,
 				Responded: utils.FalsePtr(),
 			})
 		}
@@ -786,7 +800,9 @@ func updateEventResponse(c *gin.Context) {
 		event.SignUpResponses[userIdString] = &response
 	}
 
-	// Send notification emails
+	// Notify the operator that someone responded (if enabled). Modified by Jack
+	// de Haan, 2026: routed through SMTP instead of Listmonk, and falls back to
+	// OPERATOR_EMAIL for Mensa-created events that have no owner user.
 	if (utils.Coalesce(event.NotificationsEnabled) || event.Type == models.GROUP) && !userHasResponded && userIdString != event.OwnerId.Hex() {
 		// Send email asynchronously
 		go func() {
@@ -797,36 +813,36 @@ func updateEventResponse(c *gin.Context) {
 				}
 			}()
 
+			// Recipient: the event owner, or the operator for owner-less events.
 			creator := db.GetUserById(event.OwnerId.Hex())
-			if creator == nil {
+			recipient := emailsvc.OperatorEmail()
+			ownerName := ""
+			if creator != nil {
+				recipient = creator.Email
+				ownerName = creator.FirstName
+			}
+			if recipient == "" {
 				return
 			}
 
 			var respondentName string
-			if *payload.Guest {
+			if utils.Coalesce(payload.Guest) {
 				respondentName = payload.Name
-			} else {
-				respondent := db.GetUserById(userIdString)
+			} else if respondent := db.GetUserById(userIdString); respondent != nil {
 				respondentName = fmt.Sprintf("%s %s", respondent.FirstName, respondent.LastName)
+			} else {
+				respondentName = "Someone"
 			}
 
-			if event.Type == models.GROUP {
-				someoneRespondedEmailId := 13
-				listmonk.SendEmail(creator.Email, someoneRespondedEmailId, bson.M{
-					"groupName":      event.Name,
-					"ownerName":      creator.FirstName,
-					"respondentName": respondentName,
-					"groupUrl":       fmt.Sprintf("%s/g/%s", utils.GetBaseUrl(), event.GetId()),
-				})
-			} else {
-				someoneRespondedEmailId := 10
-				listmonk.SendEmail(creator.Email, someoneRespondedEmailId, bson.M{
-					"eventName":      event.Name,
-					"ownerName":      creator.FirstName,
-					"respondentName": respondentName,
-					"eventUrl":       fmt.Sprintf("%s/e/%s", utils.GetBaseUrl(), event.GetId()),
-				})
-			}
+			eventUrl := fmt.Sprintf("%s/e/%s", utils.GetBaseUrl(), event.GetId())
+			subject := fmt.Sprintf("%s responded to \"%s\"", respondentName, event.Name)
+			body := emailsvc.SimpleBody(
+				ownerName,
+				fmt.Sprintf("<b>%s</b> just added their availability to <b>%s</b>.", respondentName, event.Name),
+				eventUrl,
+				"View responses",
+			)
+			emailsvc.Send(recipient, subject, body)
 		}()
 	}
 
@@ -845,18 +861,28 @@ func updateEventResponse(c *gin.Context) {
 				}
 			}()
 
+			// Recipient: the event owner, or the operator for owner-less events.
 			creator := db.GetUserById(event.OwnerId.Hex())
-			if creator == nil {
+			recipient := emailsvc.OperatorEmail()
+			ownerName := ""
+			if creator != nil {
+				recipient = creator.Email
+				ownerName = creator.FirstName
+			}
+			if recipient == "" {
 				return
 			}
 
-			sendEmailAfterXResponsesEmailId := 14
-			listmonk.SendEmail(creator.Email, sendEmailAfterXResponsesEmailId, bson.M{
-				"eventName":    event.Name,
-				"ownerName":    creator.FirstName,
-				"eventUrl":     fmt.Sprintf("%s/e/%s", utils.GetBaseUrl(), event.GetId()),
-				"numResponses": len(eventResponses) + 1, // We add 1 because eventResponses is the old event responses before the current user is added
-			})
+			numResponses := len(eventResponses) + 1 // eventResponses is the pre-add snapshot
+			eventUrl := fmt.Sprintf("%s/e/%s", utils.GetBaseUrl(), event.GetId())
+			subject := fmt.Sprintf("\"%s\" reached %d responses", event.Name, numResponses)
+			body := emailsvc.SimpleBody(
+				ownerName,
+				fmt.Sprintf("<b>%s</b> now has <b>%d</b> responses — enough to pick a time.", event.Name, numResponses),
+				eventUrl,
+				"View responses",
+			)
+			emailsvc.Send(recipient, subject, body)
 		}()
 	}
 
@@ -1469,4 +1495,101 @@ func getResponsesMap(responses []models.EventResponse) map[string]*models.Respon
 		result[resp.UserId] = resp.Response
 	}
 	return result
+}
+
+// Added by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+// listOperatorEvents returns every active (non-deleted) event the operator
+// created from Mensa — those have no owner user (ownerId is the nil id). It is
+// registered only on the admin listener, which is reachable solely over the
+// tailnet, so it needs no session. Each item carries live response counts,
+// respondent names, invitee (remindee) status, and the notification settings so
+// the Meet book can list and manage polls.
+func listOperatorEvents(c *gin.Context) {
+	cursor, err := db.EventsCollection.Find(
+		context.Background(),
+		bson.M{
+			"ownerId": primitive.NilObjectID,
+			"$or": bson.A{
+				bson.M{"isDeleted": bson.M{"$exists": false}},
+				bson.M{"isDeleted": false},
+			},
+		},
+		options.Find().SetSort(bson.M{"_id": -1}),
+	)
+	if err != nil {
+		logger.StdErr.Panicln(err)
+	}
+	events := make([]models.Event, 0)
+	if err := cursor.All(context.Background(), &events); err != nil {
+		logger.StdErr.Panicln(err)
+	}
+
+	type respondent struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
+	type item struct {
+		EventId                  string               `json:"eventId"`
+		ShortId                  string               `json:"shortId"`
+		Name                     string               `json:"name"`
+		Dates                    []primitive.DateTime `json:"dates"`
+		NumResponses             int                  `json:"numResponses"`
+		Respondents              []respondent         `json:"respondents"`
+		Remindees                []models.Remindee    `json:"remindees"`
+		NotificationsEnabled     bool                 `json:"notificationsEnabled"`
+		CollectEmails            bool                 `json:"collectEmails"`
+		BlindAvailabilityEnabled bool                 `json:"blindAvailabilityEnabled"`
+	}
+
+	out := make([]item, 0, len(events))
+	for _, e := range events {
+		eventResponses := db.GetEventResponses(e.Id.Hex())
+		respondents := make([]respondent, 0, len(eventResponses))
+		for _, r := range eventResponses {
+			if r.Response != nil {
+				respondents = append(respondents, respondent{Name: r.Response.Name, Email: r.Response.Email})
+			}
+		}
+		remindees := make([]models.Remindee, 0)
+		if e.Remindees != nil {
+			remindees = *e.Remindees
+		}
+		out = append(out, item{
+			EventId:                  e.Id.Hex(),
+			ShortId:                  e.GetId(),
+			Name:                     e.Name,
+			Dates:                    e.Dates,
+			NumResponses:             len(eventResponses),
+			Respondents:              respondents,
+			Remindees:                remindees,
+			NotificationsEnabled:     utils.Coalesce(e.NotificationsEnabled),
+			CollectEmails:            utils.Coalesce(e.CollectEmails),
+			BlindAvailabilityEnabled: utils.Coalesce(e.BlindAvailabilityEnabled),
+		})
+	}
+
+	c.JSON(http.StatusOK, out)
+}
+
+// deleteOperatorEvent deletes an operator (owner-less) event and its responses.
+// Auth-free on the tailnet-only admin listener; it refuses to touch any event
+// that has a real owner as a safety guard.
+func deleteOperatorEvent(c *gin.Context) {
+	eventId := c.Param("eventId")
+	event := db.GetEventByEitherId(eventId)
+	if event == nil {
+		c.JSON(http.StatusNotFound, responses.Error{Error: errs.EventNotFound})
+		return
+	}
+	if event.OwnerId != primitive.NilObjectID {
+		c.JSON(http.StatusForbidden, responses.Error{Error: errs.UserNotEventOwner})
+		return
+	}
+
+	db.EventResponsesCollection.DeleteMany(context.Background(), bson.M{"eventId": event.Id})
+	if _, err := db.EventsCollection.DeleteOne(context.Background(), bson.M{"_id": event.Id}); err != nil {
+		logger.StdErr.Panicln(err)
+	}
+
+	c.Status(http.StatusOK)
 }

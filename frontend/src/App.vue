@@ -32,7 +32,7 @@
         class="tw-relative tw-m-auto tw-flex tw-h-full tw-max-w-6xl tw-items-center tw-px-4"
       >
         <router-link :to="{ name: 'home' }" class="jdh-wordmark">
-          meet
+          meet with jdh
         </router-link>
 
         <v-spacer />

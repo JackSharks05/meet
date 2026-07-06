@@ -265,43 +265,23 @@
         />
       </div>
 
+      <!-- Modified by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+           Removed Timeful's feedback form + PayPal donate button. -->
       <template v-if="showFeedbackBtn">
         <div class="tw-w-full tw-border-t tw-border-solid tw-border-gray"></div>
 
-        <div class="tw-flex tw-flex-col tw-items-center" v-if="showFeedbackBtn">
-          <v-btn
-            class="tw-h-16"
-            block
-            id="feedback-btn"
-            text
-            href="https://forms.gle/A96i4TTWeKgH3P1W6"
-            target="_blank"
-          >
-            Give feedback to Timeful team
-          </v-btn>
-          <div
-            class="tw-w-full tw-border-t tw-border-solid tw-border-gray"
-          ></div>
-          <v-btn
-            class="tw-h-16"
-            block
-            text
-            href="https://www.paypal.com/donate/?hosted_button_id=KWCH6LGJCP6E6"
-            target="_blank"
-          >
-            Donate
-          </v-btn>
-          <div
-            class="tw-w-full tw-border-t tw-border-solid tw-border-gray"
-          ></div>
+        <div class="tw-flex tw-flex-col tw-items-center">
           <v-btn class="tw-h-16" block text :to="{ name: 'privacy-policy' }">
             Privacy Policy
           </v-btn>
         </div>
       </template>
 
+      <!-- Persistent footer: Privacy Policy + AGPL source offer. The source link
+           must appear here (not only on the homepage) so respondents who open a
+           poll link directly are still offered the Corresponding Source (AGPL §13). -->
       <div
-        class="tw-mb-16 tw-hidden tw-flex-col tw-items-center tw-justify-between sm:tw-flex"
+        class="tw-mb-16 tw-flex tw-flex-col tw-items-center tw-justify-between tw-gap-1"
       >
         <router-link
           class="tw-text-xs tw-font-medium tw-text-gray"
@@ -309,6 +289,14 @@
         >
           Privacy Policy
         </router-link>
+        <a
+          class="tw-text-xs tw-font-medium tw-text-gray"
+          href="https://github.com/JackSharks05/meet"
+          target="_blank"
+          rel="noopener"
+        >
+          Source (AGPL-3.0)
+        </a>
       </div>
 
       <div class="tw-h-8"></div>
@@ -509,6 +497,11 @@ export default {
       return this.scheduleOverlapComponent?.scheduling
     },
     canEdit() {
+      // Editing is operator-only. The public (respond-only) Vercel build never
+      // shows edit affordances; only the admin build on the tailnet can edit.
+      // Without this gate, Mensa-created events (owner = zero id, which loosely
+      // equals 0) would be editable by anyone holding the poll link.
+      if (process.env.VUE_APP_ADMIN !== "true") return false
       return (
         this.event.ownerId == 0 || this.authUser?._id === this.event.ownerId
       )
