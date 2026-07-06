@@ -4,7 +4,7 @@
 # Setup (on the Arch server):
 #   cloudflared tunnel login
 #   cloudflared tunnel create meet
-#   cloudflared tunnel route dns meet api.meet.jackdehaan.com
+#   cloudflared tunnel route dns meet meet-api.jackdehaan.com
 #   # put the generated <TUNNEL_ID>.json credentials beside this file, then:
 #   cloudflared tunnel --config ./config.yml run
 #
@@ -15,7 +15,7 @@ credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
 
 ingress:
   # Public poll/respond API → the MODE=public Go listener (localhost only).
-  - hostname: api.meet.jackdehaan.com
+  - hostname: meet-api.jackdehaan.com
     service: http://localhost:3002
   # Everything else is rejected.
   - service: http_status:404

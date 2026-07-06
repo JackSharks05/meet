@@ -32,7 +32,7 @@ a derivative work of Timeful by schej-it. See [`LICENSE`](./LICENSE) and
 Respondents ─► meet.jackdehaan.com (Vercel, static respond-only Vue build)
                        │ calls
                        ▼
-              api.meet.jackdehaan.com ─ Cloudflare Tunnel ─► Go "public" listener ┐
+              meet-api.jackdehaan.com ─ Cloudflare Tunnel ─► Go "public" listener ┐
                                                                                    ├─► MongoDB
 Operator ─► Tailscale Serve ─► admin Vue build ─► Go "admin" listener (tailnet) ──┘   (Docker)
                                                    + Google Calendar OAuth (operator-only)

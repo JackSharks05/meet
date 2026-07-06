@@ -1,7 +1,7 @@
 // Urls
 // Modified by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
 // API base URL. Set VUE_APP_API_URL per build to point at the home server's
-// Cloudflare Tunnel (e.g. https://api.meet.jackdehaan.com/api). Falls back to
+// Cloudflare Tunnel (e.g. https://meet-api.jackdehaan.com/api). Falls back to
 // localhost in dev and same-origin /api otherwise.
 export const serverURL =
   process.env.VUE_APP_API_URL ||

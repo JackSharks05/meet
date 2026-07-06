@@ -27,7 +27,7 @@ services:
       CORS_ORIGINS: ${PUBLIC_CORS_ORIGINS:-http://localhost:5173}
       LISTMONK_ENABLED: "false"
     ports:
-      # localhost only → Cloudflare Tunnel forwards api.meet.jackdehaan.com here
+      # localhost only → Cloudflare Tunnel forwards meet-api.jackdehaan.com here
       - "127.0.0.1:3002:3002"
 
   server-admin:

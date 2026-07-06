@@ -28,12 +28,12 @@ Respondents                            ┌── Docker ────────
 meet.jackdehaan.com ── HTTPS ──┐       │   └ admin  listener ─┼──┼──► Tailscale Serve
 (Vercel, Vue respond-only)     │       │  MongoDB (container) │  │     admin Vue build
    │ calls API                 ▼       └─────────────────────┘  │     (create/summary/cal)
-api.meet.jackdehaan.com ◄─ Cloudflare Tunnel ─► public listener │◄── tailnet ──┘
+meet-api.jackdehaan.com ◄─ Cloudflare Tunnel ─► public listener │◄── tailnet ──┘
    (CORS, guest, no cookies)                                     
                                        Google Calendar OAuth (operator-only)
 ```
 
-- **Public path:** Vercel serves the respond-only build → `api.meet.jackdehaan.com`
+- **Public path:** Vercel serves the respond-only build → `meet-api.jackdehaan.com`
   → Cloudflare Tunnel → Go **public listener** (read-event + submit-response only;
   guest, no cookies → clean cross-origin).
 - **Admin path:** admin build over **Tailscale Serve** → Go **admin listener**
@@ -147,13 +147,13 @@ api.meet.jackdehaan.com ◄─ Cloudflare Tunnel ─► public listener │◄�
     test poll to preview (createEvent now needs auth → Phase 7, or a DB seed).
 - **Phase 5 — Public deploy (config ready; deploy steps are operator actions):**
   - ✅ **API base configurable**: `serverURL` reads `VUE_APP_API_URL` (constants.js); the
-    public build bakes in `https://api.meet.jackdehaan.com/api` (verified in the bundle).
+    public build bakes in `https://meet-api.jackdehaan.com/api` (verified in the bundle).
   - ✅ **Rebrand fix**: the "add to calendar" share text no longer hardcodes
     `timeful.app` — it uses the deployment origin and says "Scheduled with meet".
   - ✅ **Build modes**: `npm run build` (public, respond-only) / `npm run build:admin`
     (sets `VUE_APP_ADMIN=true`); same for `serve` / `serve:admin`.
   - ✅ **Configs**: `frontend/vercel.json` (SPA rewrites, Vue preset),
-    `deploy/cloudflared/config.yml` (tunnel → `api.meet.jackdehaan.com` → `:3002` only),
+    `deploy/cloudflared/config.yml` (tunnel → `meet-api.jackdehaan.com` → `:3002` only),
     `deploy/DEPLOY.md` runbook.
   - ⏳ **Operator actions** (in `DEPLOY.md`): run the Docker stack + `cloudflared` on the
     Arch box, set `PUBLIC_CORS_ORIGINS=https://meet.jackdehaan.com`, import the repo to

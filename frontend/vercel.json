@@ -4,7 +4,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "env": {
-    "VUE_APP_API_URL": "https://api.meet.jackdehaan.com/api"
+    "VUE_APP_API_URL": "https://meet-api.jackdehaan.com/api"
   },
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

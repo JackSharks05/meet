@@ -5,7 +5,7 @@ The public site is a **static respond-only frontend on Vercel** that calls the
 (create/summary) is Phase 6 (Tailscale) and is intentionally not exposed here.
 
 ```
-Respondents ─► meet.jackdehaan.com (Vercel static)  ──calls──►  api.meet.jackdehaan.com
+Respondents ─► meet.jackdehaan.com (Vercel static)  ──calls──►  meet-api.jackdehaan.com
                                                                   └ Cloudflare Tunnel ─► localhost:3002 (MODE=public Go listener)
 ```
 
@@ -31,22 +31,22 @@ Install `cloudflared` on the server, then:
 ```bash
 cloudflared tunnel login
 cloudflared tunnel create meet
-cloudflared tunnel route dns meet api.meet.jackdehaan.com
+cloudflared tunnel route dns meet meet-api.jackdehaan.com
 # copy the printed <TUNNEL_ID>.json into deploy/cloudflared/ and set <TUNNEL_ID> in config.yml
 cloudflared tunnel --config deploy/cloudflared/config.yml run     # test it
 ```
 
-`config.yml` routes `api.meet.jackdehaan.com → http://localhost:3002` only.
+`config.yml` routes `meet-api.jackdehaan.com → http://localhost:3002` only.
 Make it permanent with the systemd unit in Phase 9.
 
-Verify: `curl https://api.meet.jackdehaan.com/api/auth/status` → `{"error":"not-signed-in"}`.
+Verify: `curl https://meet-api.jackdehaan.com/api/auth/status` → `{"error":"not-signed-in"}`.
 
 ## 3. Frontend on Vercel
 
 - Import `JackSharks05/meet` into Vercel; set **Root Directory = `frontend`**
   (Vercel reads `frontend/vercel.json` for the SPA rewrites).
 - **Environment variables:**
-  - `VUE_APP_API_URL = https://api.meet.jackdehaan.com/api`
+  - `VUE_APP_API_URL = https://meet-api.jackdehaan.com/api`
   - leave **`VUE_APP_ADMIN` unset** → public, respond-only build (no create UI).
 - Deploy, then add the custom domain **`meet.jackdehaan.com`**.
 
