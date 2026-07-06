@@ -1505,13 +1505,21 @@ func getResponsesMap(responses []models.EventResponse) map[string]*models.Respon
 // respondent names, invitee (remindee) status, and the notification settings so
 // the Meet book can list and manage polls.
 func listOperatorEvents(c *gin.Context) {
+	// Operator (Mensa-created) events have no owner. Because OwnerId is stored
+	// with `omitempty`, a nil owner is omitted from the document entirely, so we
+	// match both "ownerId is the nil id" and "ownerId field is absent".
 	cursor, err := db.EventsCollection.Find(
 		context.Background(),
 		bson.M{
-			"ownerId": primitive.NilObjectID,
-			"$or": bson.A{
-				bson.M{"isDeleted": bson.M{"$exists": false}},
-				bson.M{"isDeleted": false},
+			"$and": bson.A{
+				bson.M{"$or": bson.A{
+					bson.M{"ownerId": primitive.NilObjectID},
+					bson.M{"ownerId": bson.M{"$exists": false}},
+				}},
+				bson.M{"$or": bson.A{
+					bson.M{"isDeleted": bson.M{"$exists": false}},
+					bson.M{"isDeleted": false},
+				}},
 			},
 		},
 		options.Find().SetSort(bson.M{"_id": -1}),

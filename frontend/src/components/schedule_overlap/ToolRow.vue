@@ -145,11 +145,6 @@
       </div>
     </div>
 
-    <!-- <Advertisement
-      class="tw-mt-5 sm:tw-mt-10"
-      :ownerId="event.ownerId"
-    ></Advertisement> -->
-
     <!-- <div v-if="!isPremiumUser">
       <ins
         class="adsbygoogle"
@@ -167,7 +162,6 @@
 import TimezoneSelector from "./TimezoneSelector.vue"
 import GCalWeekSelector from "./GCalWeekSelector.vue"
 import { isPhone } from "@/utils"
-import Advertisement from "../event/Advertisement.vue"
 import ExpandableSection from "../ExpandableSection.vue"
 import EventOptions from "./EventOptions.vue"
 import { timeTypes, guestUserId } from "@/constants"
@@ -197,7 +191,6 @@ export default {
   components: {
     TimezoneSelector,
     GCalWeekSelector,
-    Advertisement,
     ExpandableSection,
     EventOptions,
   },
