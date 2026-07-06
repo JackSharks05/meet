@@ -97,7 +97,7 @@ export default {
   name: "Home",
 
   metaInfo: {
-    title: "Home - Timeful",
+    title: "Home - meet with jdh",
   },
 
   components: {

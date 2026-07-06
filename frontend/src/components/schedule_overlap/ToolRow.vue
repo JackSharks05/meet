@@ -164,7 +164,7 @@ import GCalWeekSelector from "./GCalWeekSelector.vue"
 import { isPhone } from "@/utils"
 import ExpandableSection from "../ExpandableSection.vue"
 import EventOptions from "./EventOptions.vue"
-import { timeTypes, guestUserId } from "@/constants"
+import { timeTypes } from "@/constants"
 import { mapState, mapGetters } from "vuex"
 
 export default {
@@ -231,18 +231,24 @@ export default {
     isPhone() {
       return isPhone(this.$vuetify)
     },
-    guestEvent() {
-      return this.event.ownerId == guestUserId
-    },
     isOwner() {
-      return this.event.ownerId == this.authUser?._id
+      // Modified by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+      // The admin build is the operator's tailnet-only view — always the owner.
+      return (
+        process.env.VUE_APP_ADMIN === "true" ||
+        this.event.ownerId == this.authUser?._id
+      )
     },
     showScheduleEventButton() {
+      // Only the operator may schedule. Timeful let any guest schedule a guest-
+      // owned event (guestEvent), but in this fork every event is guest-owned
+      // (created from Mensa without a session), so that would expose scheduling
+      // to respondents. Gate on isOwner (true only in the admin build) instead.
       return (
         !this.event.daysOnly &&
         this.numResponses > 0 &&
         this.state !== this.states.EDIT_AVAILABILITY &&
-        (this.guestEvent || this.isOwner)
+        this.isOwner
       )
     },
   },

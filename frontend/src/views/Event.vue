@@ -310,7 +310,7 @@
       >
         <template v-if="!isEditing && !isScheduling">
           <v-btn
-            v-if="!event.daysOnly && numResponses > 0"
+            v-if="!event.daysOnly && numResponses > 0 && isAdminBuild"
             text
             class="tw-text-white"
             @click="scheduleEvent"
@@ -402,7 +402,14 @@ import NewDialog from "@/components/NewDialog.vue"
 import ScheduleOverlap from "@/components/schedule_overlap/ScheduleOverlap.vue"
 import GuestDialog from "@/components/GuestDialog.vue"
 import SignUpForSlotDialog from "@/components/sign_up_form/SignUpForSlotDialog.vue"
-import { errors, authTypes, eventTypes, calendarTypes, dayIndexToDayString, allTimezones } from "@/constants"
+import {
+  errors,
+  authTypes,
+  eventTypes,
+  calendarTypes,
+  dayIndexToDayString,
+  allTimezones,
+} from "@/constants"
 import isWebview from "is-ua-webview"
 import SignInNotSupportedDialog from "@/components/SignInNotSupportedDialog.vue"
 import MarkAvailabilityDialog from "@/components/calendar_permission_dialogs/MarkAvailabilityDialog.vue"
@@ -476,7 +483,6 @@ export default {
     if (this.linkApple) {
       this.choiceDialog = true
     }
-
   },
 
   computed: {
@@ -496,12 +502,17 @@ export default {
     isScheduling() {
       return this.scheduleOverlapComponent?.scheduling
     },
+    // True only in the operator's tailnet-only admin build. Gates operator-only
+    // actions (schedule, edit) that must never appear on the public poll page.
+    isAdminBuild() {
+      return process.env.VUE_APP_ADMIN === "true"
+    },
     canEdit() {
       // Editing is operator-only. The public (respond-only) Vercel build never
       // shows edit affordances; only the admin build on the tailnet can edit.
       // Without this gate, Mensa-created events (owner = zero id, which loosely
       // equals 0) would be editable by anyone holding the poll link.
-      if (process.env.VUE_APP_ADMIN !== "true") return false
+      if (!this.isAdminBuild) return false
       return (
         this.event.ownerId == 0 || this.authUser?._id === this.event.ownerId
       )
@@ -1006,33 +1017,49 @@ export default {
       // Only intercept messages from our own window (plugin responses)
       if (event.data?.type === "FILL_CALENDAR_EVENT_RESPONSE") {
         const { command, requestId, ok, error, payload } = event.data
-        
+
         if (ok) {
           // Flatten get-slots output so slots are easy to scan in the console
           if (command === "get-slots" && payload?.slots) {
-            console.log(`[PLUGIN RESPONSE - SUCCESS] ${command} | timeIncrement: ${payload.timeIncrement} | timezone: ${payload.timezone ?? "—"}`)
+            console.log(
+              `[PLUGIN RESPONSE - SUCCESS] ${command} | timeIncrement: ${
+                payload.timeIncrement
+              } | timezone: ${payload.timezone ?? "—"}`
+            )
             Object.entries(payload.slots).forEach(([userId, u]) => {
-              const label = [u.name, u.email].filter(Boolean).join(" ") || userId
-              console.log(`  ${label}:`, { availability: u.availability, ifNeeded: u.ifNeeded })
+              const label =
+                [u.name, u.email].filter(Boolean).join(" ") || userId
+              console.log(`  ${label}:`, {
+                availability: u.availability,
+                ifNeeded: u.ifNeeded,
+              })
             })
           } else {
-            console.log(`[PLUGIN RESPONSE - SUCCESS] ${command}`, { requestId, payload, timestamp: new Date().toISOString() })
+            console.log(`[PLUGIN RESPONSE - SUCCESS] ${command}`, {
+              requestId,
+              payload,
+              timestamp: new Date().toISOString(),
+            })
           }
         } else {
           console.error(`[PLUGIN RESPONSE - ERROR] ${command}`, {
             requestId,
             error: error?.message || error,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           })
         }
       }
     },
 
-    async setSlots(event) { 
+    async setSlots(event) {
       const requestId = event.data?.requestId
       const command = "set-slots"
       if (this.isGroup) {
-        sendPluginError(requestId, command, "Group events are not supported yet")
+        sendPluginError(
+          requestId,
+          command,
+          "Group events are not supported yet"
+        )
         return
       }
 
@@ -1048,22 +1075,22 @@ export default {
       // Check if guestName is provided in payload - if so, force guest mode
       const payloadGuestName = event.data?.payload?.guestName
       const forceGuestMode = payloadGuestName && payloadGuestName.length > 0
-      
+
       // Determine if current user is guest or logged-in
       // If guestName is provided in payload, always treat as guest (ignore login status)
       const isGuest = forceGuestMode || !this.authUser
-      
+
       // For guests, handle guest name and email
       let guestName = ""
       let guestEmail = ""
       if (isGuest) {
         const guestNameKey = `${this.event._id}.guestName`
-        
+
         if (forceGuestMode) {
           // guestName provided in payload - use it and store in localStorage
           guestName = payloadGuestName
           localStorage[guestNameKey] = guestName
-          
+
           // If event collects emails, require guestEmail in payload
           if (this.event.collectEmails) {
             guestEmail = event.data?.payload?.guestEmail || ""
@@ -1075,7 +1102,7 @@ export default {
               )
               return
             }
-            
+
             // Validate email format
             if (!validateEmail(guestEmail)) {
               sendPluginError(
@@ -1087,14 +1114,15 @@ export default {
             }
           } else {
             // Email not required, but get from payload if provided, or from existing response
-            guestEmail = event.data?.payload?.guestEmail || 
-                        this.event.responses[guestName]?.email || 
-                        ""
+            guestEmail =
+              event.data?.payload?.guestEmail ||
+              this.event.responses[guestName]?.email ||
+              ""
           }
         } else {
           // No guestName in payload - use existing flow (check localStorage)
           const storedGuestName = localStorage[guestNameKey]
-          
+
           // If no guest name in localStorage, require it from payload
           if (!storedGuestName || storedGuestName.length === 0) {
             sendPluginError(
@@ -1104,13 +1132,14 @@ export default {
             )
             return
           }
-          
+
           // Use stored guest name
           guestName = storedGuestName
           // Get email from existing response or payload (if provided)
-          guestEmail = event.data?.payload?.guestEmail || 
-                      this.event.responses[guestName]?.email || 
-                      ""
+          guestEmail =
+            event.data?.payload?.guestEmail ||
+            this.event.responses[guestName]?.email ||
+            ""
         }
       }
 
@@ -1124,7 +1153,7 @@ export default {
 
       // Validate DOW payload if this is a DOW event (only if slots are provided)
       // Check if timezone is provided - if so, skip same-day check since timezone conversion may cause day boundary crossing
-      const hasTimezone = !!(event.data?.payload?.timezone)
+      const hasTimezone = !!event.data?.payload?.timezone
       if (this.event.type === eventTypes.DOW && slots.length > 0) {
         const validationResult = validateDOWPayload(slots, hasTimezone)
         if (validationResult) {
@@ -1133,14 +1162,15 @@ export default {
         }
       }
 
-      if (this.event.type === eventTypes.DOW && slots.length > 0) { //need to offset for DOW cuz dow dates are in DST
+      if (this.event.type === eventTypes.DOW && slots.length > 0) {
+        //need to offset for DOW cuz dow dates are in DST
         slots = slots.map((slot) => {
           const startDate = dayjs(slot.start)
           const endDate = dayjs(slot.end)
           return {
             ...slot,
-            start: startDate.add(1, 'hour').format('YYYY-MM-DDTHH:mm:ss'),
-            end: endDate.add(1, 'hour').format('YYYY-MM-DDTHH:mm:ss'),
+            start: startDate.add(1, "hour").format("YYYY-MM-DDTHH:mm:ss"),
+            end: endDate.add(1, "hour").format("YYYY-MM-DDTHH:mm:ss"),
           }
         })
       }
@@ -1151,7 +1181,7 @@ export default {
       if (event.data?.payload?.timezone) {
         // User provided timezone in the message (should be IANA timezone name)
         const providedTimezone = event.data.payload.timezone
-        
+
         // Validate that the provided timezone exists in allTimezones
         if (!(providedTimezone in allTimezones)) {
           sendPluginError(
@@ -1161,9 +1191,9 @@ export default {
           )
           return
         }
-        
+
         timezoneValue = providedTimezone
-      } else{
+      } else {
         // Use timezone from localStorage (should have IANA timezone name in .value)
         try {
           const timezoneObj = JSON.parse(localStorage["timezone"])
@@ -1176,10 +1206,13 @@ export default {
 
       // Generate all valid displayed time ranges using ScheduleOverlap's existing logic
       // Returns a Map that maps time slot startTime.getTime() to { row, col, startTime, endTime }
-      const timeSlotToRowCol = (this.scheduleOverlapComponent && typeof this.scheduleOverlapComponent.getAllValidTimeRanges === 'function')
-        ? this.scheduleOverlapComponent.getAllValidTimeRanges()
-        : new Map()
-      
+      const timeSlotToRowCol =
+        this.scheduleOverlapComponent &&
+        typeof this.scheduleOverlapComponent.getAllValidTimeRanges ===
+          "function"
+          ? this.scheduleOverlapComponent.getAllValidTimeRanges()
+          : new Map()
+
       // Validate each slot has required fields
       for (let i = 0; i < slots.length; i++) {
         const slot = slots[i]
@@ -1199,10 +1232,7 @@ export default {
           )
           return
         }
-        if (
-          slot.status !== "available" &&
-          slot.status !== "if-needed"
-        ) {
+        if (slot.status !== "available" && slot.status !== "if-needed") {
           sendPluginError(
             requestId,
             command,
@@ -1221,7 +1251,7 @@ export default {
       const convertedSlots = []
       for (let i = 0; i < slots.length; i++) {
         const slot = slots[i]
-        
+
         // Convert timestamps from user's timezone to UTC
         let startTime, endTime
         try {
@@ -1262,52 +1292,51 @@ export default {
           )
           return
         }
-
       }
 
-            // Split slots into intervals based on timeIncrement
+      // Split slots into intervals based on timeIncrement
       const allAvailabilityTimestamps = []
       const allIfNeededTimestamps = []
       // Track timestamps and their statuses to detect conflicts
       const timestampStatusMap = new Map()
 
-      let isBrokenBounds = false;
+      let isBrokenBounds = false
       slots.forEach((slot, i) => {
         const userStartDate = dayjs.tz(slot.start, timezoneValue)
         const userEndDate = dayjs.tz(slot.end, timezoneValue)
         const userStartMs = userStartDate.valueOf()
         const userEndMs = userEndDate.valueOf()
-        
+
         // Calculate the width of the user's interval
         const intWidth = userEndMs - userStartMs
-        
+
         // Calculate total covered width by summing all overlapping slot intersections
         // Also generate timestamps in the same loop
         let coveredWidth = 0
-        
+
         timeSlotToRowCol.forEach((value, key) => {
           const slotStartMs = value.startTime.valueOf()
           const slotEndMs = value.endTime.valueOf()
-          
+
           // Check for overlap: userStart <= slotEnd && userEnd >= slotStart
           if (userStartMs <= slotEndMs && userEndMs >= slotStartMs) {
             // Calculate intersection of user interval and slot
             const intersectionStartMs = Math.max(userStartMs, slotStartMs)
             const intersectionEndMs = Math.min(userEndMs, slotEndMs)
-            
+
             // Add this intersection's width to the total for bounds checking
             coveredWidth += intersectionEndMs - intersectionStartMs
-            
+
             // Generate timestamps at timeIncrement intervals
             const incrementMs = timeIncrement * 60 * 1000
             let currentTimeMs = intersectionStartMs
-            
+
             // Generate timestamps for the intersection
             // Use <= to include boundary timestamps when intersection is exactly at slot boundaries
             while (currentTimeMs < intersectionEndMs) {
               const timestamp = new Date(currentTimeMs)
               const timestampKey = timestamp.getTime()
-              
+
               // Check for status conflicts
               if (timestampStatusMap.has(timestampKey)) {
                 const existingStatus = timestampStatusMap.get(timestampKey)
@@ -1322,16 +1351,16 @@ export default {
               } else {
                 timestampStatusMap.set(timestampKey, slot.status)
               }
-              
+
               // Add Date object (not milliseconds) to appropriate array
               if (slot.status === "available") {
                 allAvailabilityTimestamps.push(timestamp)
               } else {
                 allIfNeededTimestamps.push(timestamp)
               }
-              
+
               currentTimeMs += incrementMs
-              
+
               // Stop if we've exceeded the intersection end
               if (currentTimeMs > intersectionEndMs) {
                 break
@@ -1339,18 +1368,18 @@ export default {
             }
           }
         })
-        
+
         if (coveredWidth < intWidth) {
           sendPluginError(
             requestId,
             command,
             `Time slot at index ${i} (${slot.start} to ${slot.end}) falls outside the event's date/time range.`
           )
-          isBrokenBounds = true;
+          isBrokenBounds = true
         }
       })
 
-      if (isBrokenBounds) return;
+      if (isBrokenBounds) return
 
       // Send new slots (overwrites existing availability)
       try {
@@ -1387,140 +1416,160 @@ export default {
     },
 
     async getSlots(event) {
-        const requestId = event.data?.requestId
-        const command = "get-slots"
+      const requestId = event.data?.requestId
+      const command = "get-slots"
 
-        // Need the event to calculate timeMin and timeMax
-        if (!this.event) {
-          sendPluginError(requestId, command, "Event not loaded yet")
+      // Need the event to calculate timeMin and timeMax
+      if (!this.event) {
+        sendPluginError(requestId, command, "Event not loaded yet")
+        return
+      }
+
+      // Resolve timezone: same logic as set-slots (payload → localStorage → browser)
+      let timezoneValue = null
+      if (event.data?.payload?.timezone) {
+        const providedTimezone = event.data.payload.timezone
+        if (!(providedTimezone in allTimezones)) {
+          sendPluginError(
+            requestId,
+            command,
+            `Invalid timezone: "${providedTimezone}". Please provide a valid IANA timezone name from the supported timezones list.`
+          )
           return
         }
-
-        // Resolve timezone: same logic as set-slots (payload → localStorage → browser)
-        let timezoneValue = null
-        if (event.data?.payload?.timezone) {
-          const providedTimezone = event.data.payload.timezone
-          if (!(providedTimezone in allTimezones)) {
-            sendPluginError(
-              requestId,
-              command,
-              `Invalid timezone: "${providedTimezone}". Please provide a valid IANA timezone name from the supported timezones list.`
-            )
-            return
-          }
-          timezoneValue = providedTimezone
-        } else {
-          try {
-            const timezoneObj = JSON.parse(localStorage["timezone"])
-            timezoneValue = timezoneObj.value
-          } catch (err) {
-            timezoneValue = Intl.DateTimeFormat().resolvedOptions().timeZone
-          }
-        }
-
-        let sanitizedId = this.eventId.replaceAll(".", "")
-
-        // Calculate timeMin and timeMax using the same logic as fetchResponses in ScheduleOverlap
-        let timeMin, timeMax
-        if (this.event.type === eventTypes.GROUP) {
-          if (this.event.dates.length > 0) {
-            // Fetch the date range for the current week
-            timeMin = new Date(this.event.dates[0])
-            timeMax = new Date(this.event.dates[this.event.dates.length - 1])
-            timeMax.setDate(timeMax.getDate() + 1)
-
-            // Convert dow dates to discrete dates
-            timeMin = dateToDowDate(
-              this.event.dates,
-              timeMin,
-              this.weekOffset,
-              true
-            )
-            timeMax = dateToDowDate(
-              this.event.dates,
-              timeMax,
-              this.weekOffset,
-              true
-            )
-          }
-        } else {
-          // For non-GROUP events, use the event dates directly
-          if (this.event.dates.length > 0) {
-            // Fetch the entire time range of availabilities
-            timeMin = new Date(this.event.dates[0])
-            timeMax = new Date(this.event.dates[this.event.dates.length - 1])
-            timeMax.setDate(timeMax.getDate() + 1)
-          }
-        }
-
-        if (!timeMin || !timeMax) {
-          sendPluginError(requestId, command, "Could not calculate timeMin and timeMax")
-          return
-        }
-
+        timezoneValue = providedTimezone
+      } else {
         try {
-          // Fetch responses between timeMin and timeMax
-          const url = `/events/${sanitizedId}/responses?timeMin=${timeMin.toISOString()}&timeMax=${timeMax.toISOString()}`
-          const responses = await get(url)
+          const timezoneObj = JSON.parse(localStorage["timezone"])
+          timezoneValue = timezoneObj.value
+        } catch (err) {
+          timezoneValue = Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
+      }
 
-          // Build response object with all users' slots
-          const allSlots = {}
-          
-          for (const userId in responses) {
-            const response = responses[userId]
-            
-            // Get name and email
-            let name = ""
-            let email = ""
-            
-            // For guests, name and email are in the response directly
-            if (response.name && response.name.length > 0) {
-              name = response.name
-              email = response.email || ""
+      let sanitizedId = this.eventId.replaceAll(".", "")
+
+      // Calculate timeMin and timeMax using the same logic as fetchResponses in ScheduleOverlap
+      let timeMin, timeMax
+      if (this.event.type === eventTypes.GROUP) {
+        if (this.event.dates.length > 0) {
+          // Fetch the date range for the current week
+          timeMin = new Date(this.event.dates[0])
+          timeMax = new Date(this.event.dates[this.event.dates.length - 1])
+          timeMax.setDate(timeMax.getDate() + 1)
+
+          // Convert dow dates to discrete dates
+          timeMin = dateToDowDate(
+            this.event.dates,
+            timeMin,
+            this.weekOffset,
+            true
+          )
+          timeMax = dateToDowDate(
+            this.event.dates,
+            timeMax,
+            this.weekOffset,
+            true
+          )
+        }
+      } else {
+        // For non-GROUP events, use the event dates directly
+        if (this.event.dates.length > 0) {
+          // Fetch the entire time range of availabilities
+          timeMin = new Date(this.event.dates[0])
+          timeMax = new Date(this.event.dates[this.event.dates.length - 1])
+          timeMax.setDate(timeMax.getDate() + 1)
+        }
+      }
+
+      if (!timeMin || !timeMax) {
+        sendPluginError(
+          requestId,
+          command,
+          "Could not calculate timeMin and timeMax"
+        )
+        return
+      }
+
+      try {
+        // Fetch responses between timeMin and timeMax
+        const url = `/events/${sanitizedId}/responses?timeMin=${timeMin.toISOString()}&timeMax=${timeMax.toISOString()}`
+        const responses = await get(url)
+
+        // Build response object with all users' slots
+        const allSlots = {}
+
+        for (const userId in responses) {
+          const response = responses[userId]
+
+          // Get name and email
+          let name = ""
+          let email = ""
+
+          // For guests, name and email are in the response directly
+          if (response.name && response.name.length > 0) {
+            name = response.name
+            email = response.email || ""
+          } else {
+            // For logged-in users, get from this.event.responses (populated by getEvent endpoint)
+            const eventResponse = this.event.responses?.[userId]
+            if (eventResponse?.user) {
+              const user = eventResponse.user
+              name = `${user.firstName || ""} ${user.lastName || ""}`.trim()
+              email = user.email || ""
             } else {
-              // For logged-in users, get from this.event.responses (populated by getEvent endpoint)
-              const eventResponse = this.event.responses?.[userId]
-              if (eventResponse?.user) {
-                const user = eventResponse.user
-                name = `${user.firstName || ""} ${user.lastName || ""}`.trim()
-                email = user.email || ""
-              } else {
-                // Fallback: use userId if user info not available
-                name = userId
-                email = ""
-              }
-            }
-
-            // Convert UTC to requested timezone. For DOW events, if timezone observes DST, subtract 1 hour
-            // (hardcoded DOW dates are in DST, so conversion in DST timezones is 1 hour ahead)
-            let availability = convertUTCSlotsToLocalISO(response.availability, timezoneValue)
-            let ifNeeded = convertUTCSlotsToLocalISO(response.ifNeeded, timezoneValue)
-            if (this.event.type === eventTypes.DOW && timezoneObservesDST(timezoneValue)) {
-              const subtractOneHour = (s) =>
-                dayjs.tz(s, timezoneValue).subtract(1, "hour").format("YYYY-MM-DDTHH:mm:ss")
-              availability = availability.map(subtractOneHour)
-              ifNeeded = ifNeeded.map(subtractOneHour)
-            }
-
-            allSlots[userId] = {
-              name,
-              email,
-              availability,
-              ifNeeded,
+              // Fallback: use userId if user info not available
+              name = userId
+              email = ""
             }
           }
 
-          // Get time increment (default to 15 if not set)
-          const timeIncrement = this.event.timeIncrement ?? 15
+          // Convert UTC to requested timezone. For DOW events, if timezone observes DST, subtract 1 hour
+          // (hardcoded DOW dates are in DST, so conversion in DST timezones is 1 hour ahead)
+          let availability = convertUTCSlotsToLocalISO(
+            response.availability,
+            timezoneValue
+          )
+          let ifNeeded = convertUTCSlotsToLocalISO(
+            response.ifNeeded,
+            timezoneValue
+          )
+          if (
+            this.event.type === eventTypes.DOW &&
+            timezoneObservesDST(timezoneValue)
+          ) {
+            const subtractOneHour = (s) =>
+              dayjs
+                .tz(s, timezoneValue)
+                .subtract(1, "hour")
+                .format("YYYY-MM-DDTHH:mm:ss")
+            availability = availability.map(subtractOneHour)
+            ifNeeded = ifNeeded.map(subtractOneHour)
+          }
 
-          sendPluginSuccess(requestId, command, {
-            slots: allSlots,
-            timeIncrement,
-            timezone: timezoneValue,
-          })
-        } catch (err) {
-          sendPluginError(requestId, command, `Failed to fetch responses: ${err.message || "Unknown error"}`)
+          allSlots[userId] = {
+            name,
+            email,
+            availability,
+            ifNeeded,
+          }
         }
+
+        // Get time increment (default to 15 if not set)
+        const timeIncrement = this.event.timeIncrement ?? 15
+
+        sendPluginSuccess(requestId, command, {
+          slots: allSlots,
+          timeIncrement,
+          timezone: timezoneValue,
+        })
+      } catch (err) {
+        sendPluginError(
+          requestId,
+          command,
+          `Failed to fetch responses: ${err.message || "Unknown error"}`
+        )
+      }
     },
 
     // -----------------------------------
@@ -1643,7 +1692,7 @@ export default {
         this.$nextTick(() => {
           this.scheduleOverlapComponent = this.$refs.scheduleOverlap
         })
-        document.title = `${this.event.name} - Timeful`
+        document.title = `${this.event.name} - meet with jdh`
       }
     },
     scheduleOverlapComponent() {

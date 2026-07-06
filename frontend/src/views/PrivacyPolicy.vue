@@ -12,7 +12,12 @@
       <p>
         meet is a private, self-hosted availability poll. It is a fork of the
         open-source
-        <a href="https://github.com/schej-it/timeful.app" target="_blank" rel="noopener">Timeful</a>
+        <a
+          href="https://github.com/schej-it/timeful.app"
+          target="_blank"
+          rel="noopener"
+          >Timeful</a
+        >
         app, with the marketing site, payments, ads, and third-party analytics
         removed.
       </p>
@@ -35,7 +40,7 @@
       <p>
         You can update or remove your own response from a poll at any time. To
         have a poll and its responses deleted entirely, contact the poll's
-        creator.
+        creator (meet [at] jackdehaan [dot] com).
       </p>
 
       <div class="jdh-privacy__rule"></div>

@@ -1656,7 +1656,15 @@ export default {
       return isPhone(this.$vuetify)
     },
     isOwner() {
-      return this.authUser?._id === this.event.ownerId
+      // Modified by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+      // The admin build (VUE_APP_ADMIN=true) is the operator's tailnet-only view,
+      // so it always counts as the owner — this unlocks scheduling and viewing
+      // blind (hidden) responses. The public build has no VUE_APP_ADMIN, so
+      // respondents are never treated as the owner.
+      return (
+        process.env.VUE_APP_ADMIN === "true" ||
+        this.authUser?._id === this.event.ownerId
+      )
     },
     isGuestEvent() {
       return this.event.ownerId === guestUserId

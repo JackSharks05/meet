@@ -197,7 +197,7 @@ export default {
   name: "Settings",
 
   metaInfo: {
-    title: "Settings - Timeful",
+    title: "Settings - meet with jdh",
   },
 
   components: { CalendarAccounts },
