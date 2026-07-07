@@ -128,6 +128,17 @@ func GetBaseUrl() string {
 	return "http://localhost:8080"
 }
 
+// Returns the base url for operator-facing links (e.g. the "view responses"
+// button in notification emails). This is the tailnet-only admin UI, configured
+// via ADMIN_BASE_URL (e.g. https://<machine>.<tailnet>.ts.net); it falls back to
+// the public base url if unset.
+func GetAdminBaseUrl() string {
+	if url := strings.TrimSpace(os.Getenv("ADMIN_BASE_URL")); url != "" {
+		return strings.TrimRight(url, "/")
+	}
+	return GetBaseUrl()
+}
+
 // Returns the value of the first non nil pointer in `args`.
 // Otherwise, just return the zero value
 func Coalesce[T any](args ...*T) T {

@@ -59,12 +59,12 @@
           >
             + Create new
           </v-btn>
+          <!-- No meet sign-in: the admin build is operator-only by tailnet
+               isolation, so there's no sign-in button. AuthUserMenu still shows
+               if a session somehow exists, but it's never required. -->
           <div v-if="authUser" class="sm:tw-ml-4">
             <AuthUserMenu />
           </div>
-          <v-btn v-else id="top-right-sign-in-btn" text @click="signIn">
-            Sign in
-          </v-btn>
         </template>
       </div>
     </div>

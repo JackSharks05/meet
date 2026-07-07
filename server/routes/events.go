@@ -56,7 +56,9 @@ func InitEvents(router *gin.RouterGroup, admin bool) {
 	// operator can manage their Mensa-created events, which have no owner session.
 	eventRouter.GET("", listOperatorEvents)
 	eventRouter.DELETE("/:eventId", deleteOperatorEvent)
-	eventRouter.PUT("/:eventId", middleware.AuthRequired(), editEvent)
+	// editEvent is also auth-free on the tailnet — the operator has no meet
+	// sign-in, and the handler already treats owner-less events as editable.
+	eventRouter.PUT("/:eventId", editEvent)
 	eventRouter.POST("/:eventId/decline", middleware.AuthRequired(), declineInvite)
 	eventRouter.GET("/:eventId/calendar-availabilities", middleware.AuthRequired(), getCalendarAvailabilities)
 	eventRouter.POST("/:eventId/duplicate", middleware.AuthRequired(), duplicateEvent)
@@ -834,7 +836,9 @@ func updateEventResponse(c *gin.Context) {
 				respondentName = "Someone"
 			}
 
-			eventUrl := fmt.Sprintf("%s/e/%s", utils.GetBaseUrl(), event.GetId())
+			// Operator-facing link → the tailnet admin UI (view all responses +
+			// schedule), not the public poll page.
+			eventUrl := fmt.Sprintf("%s/e/%s", utils.GetAdminBaseUrl(), event.GetId())
 			subject := fmt.Sprintf("%s responded to \"%s\"", respondentName, event.Name)
 			body := emailsvc.SimpleBody(
 				ownerName,
@@ -874,7 +878,8 @@ func updateEventResponse(c *gin.Context) {
 			}
 
 			numResponses := len(eventResponses) + 1 // eventResponses is the pre-add snapshot
-			eventUrl := fmt.Sprintf("%s/e/%s", utils.GetBaseUrl(), event.GetId())
+			// Operator-facing link → the tailnet admin UI, not the public page.
+			eventUrl := fmt.Sprintf("%s/e/%s", utils.GetAdminBaseUrl(), event.GetId())
 			subject := fmt.Sprintf("\"%s\" reached %d responses", event.Name, numResponses)
 			body := emailsvc.SimpleBody(
 				ownerName,

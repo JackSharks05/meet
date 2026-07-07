@@ -199,7 +199,7 @@
         </div>
 
         <v-checkbox
-          v-if="!guestEvent && authUser"
+          v-if="!guestEvent && (authUser || isAdminBuild)"
           v-model="notificationsEnabled"
           hide-details
           class="tw-mt-2"
@@ -236,14 +236,14 @@
 
         <div class="tw-flex tw-flex-col tw-gap-2">
           <ExpandableSection
-            v-if="authUser && !guestEvent"
+            v-if="(authUser || isAdminBuild) && !guestEvent"
             label="Email reminders"
             v-model="showEmailReminders"
             :auto-scroll="dialog"
           >
             <div class="tw-flex tw-flex-col tw-gap-5 tw-pt-2">
               <EmailInput
-                v-show="authUser"
+                v-show="authUser || isAdminBuild"
                 ref="emailInput"
                 @requestContactsAccess="requestContactsAccess"
                 labelColor="tw-text-very-dark-gray"
@@ -296,7 +296,7 @@
                 ></v-select>
               </div>
               <v-checkbox
-                v-if="authUser && !guestEvent"
+                v-if="(authUser || isAdminBuild) && !guestEvent"
                 v-model="collectEmails"
                 hide-details
               >
@@ -336,7 +336,7 @@
                 </template>
               </v-checkbox>
               <v-checkbox
-                v-if="authUser && !guestEvent"
+                v-if="(authUser || isAdminBuild) && !guestEvent"
                 v-model="blindAvailabilityEnabled"
                 messages="Only show responses to event creator"
               >
@@ -377,7 +377,7 @@
                 </template>
               </v-checkbox>
               <v-checkbox
-                v-if="authUser && !guestEvent"
+                v-if="(authUser || isAdminBuild) && !guestEvent"
                 v-model="sendEmailAfterXResponsesEnabled"
                 hide-details
               >
@@ -621,6 +621,14 @@ export default {
     },
     guestEvent() {
       return this.event && this.event.ownerId == guestUserId
+    },
+    // Modified by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+    // The admin build is the operator's tailnet-only view. There's no meet
+    // sign-in, so the operator is treated as authorized: features that Timeful
+    // gated behind an account (notifications, collect emails, blind
+    // availability, email-after-X, reminders) are enabled directly.
+    isAdminBuild() {
+      return process.env.VUE_APP_ADMIN === "true"
     },
     timeIncrementItems() {
       return [
