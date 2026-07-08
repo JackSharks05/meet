@@ -160,7 +160,7 @@ func createEvent(c *gin.Context) {
 		if signedIn {
 			ownerName = user.FirstName
 		} else {
-			ownerName = "Somebody"
+			ownerName = "JdH"
 		}
 
 		// Email each invitee the poll link so they can add their availability.
@@ -170,7 +170,7 @@ func createEvent(c *gin.Context) {
 		subject := fmt.Sprintf("%s wants your availability: %s", ownerName, payload.Name)
 		body := emailsvc.SimpleBody(
 			"",
-			fmt.Sprintf("%s invited you to fill out your availability for <b>%s</b>.", ownerName, payload.Name),
+			fmt.Sprintf("%s please fill out your availability for <b>%s</b>. Can't wait to see you soon!!", ownerName, payload.Name),
 			eventUrl,
 			"Add your availability",
 		)
@@ -219,7 +219,7 @@ func createEvent(c *gin.Context) {
 			if signedIn {
 				ownerName = user.FirstName
 			} else {
-				ownerName = "Somebody"
+				ownerName = "JdH"
 			}
 
 			// Add attendees to attendees array and send invite emails
@@ -354,7 +354,7 @@ func editEvent(c *gin.Context) {
 		// Determine owner name
 		var ownerName string
 		if event.OwnerId == primitive.NilObjectID {
-			ownerName = "Somebody"
+			ownerName = "JdH"
 		} else {
 			owner := db.GetUserById(event.OwnerId.Hex())
 			ownerName = owner.FirstName
@@ -396,7 +396,7 @@ func editEvent(c *gin.Context) {
 			owner = db.GetUserById(event.OwnerId.Hex())
 			ownerName = owner.FirstName
 		} else {
-			ownerName = "Somebody"
+			ownerName = "JdH"
 		}
 
 		if len(removed) > 0 {
