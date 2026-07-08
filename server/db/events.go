@@ -71,12 +71,14 @@ func GetEventByShortId(shortEventId string) *models.Event {
 	return &event
 }
 
-// Returns an event by either its _id or shortId
+// Returns an event by either its _id or shortId.
+// Modified by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+// Try the shortId first so custom slugs of any length resolve (the old length<=10
+// heuristic broke slugs longer than 10 chars); fall back to the Mongo _id.
 func GetEventByEitherId(id string) *models.Event {
-	if len(id) <= 10 {
-		return GetEventByShortId(id)
+	if e := GetEventByShortId(id); e != nil {
+		return e
 	}
-
 	return GetEventById(id)
 }
 

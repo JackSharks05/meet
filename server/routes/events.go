@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/sessions"
@@ -80,6 +81,11 @@ func createEvent(c *gin.Context) {
 		Dates    []primitive.DateTime `json:"dates" binding:"required"`
 		Type     models.EventType     `json:"type" binding:"required"`
 
+		// Optional custom slug (like a shortlink) + host display name. Added by
+		// Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+		ShortId   *string `json:"shortId"`
+		OwnerName *string `json:"ownerName"`
+
 		// Only for specific times for specific dates events
 		HasSpecificTimes *bool                `json:"hasSpecificTimes"`
 		Times            []primitive.DateTime `json:"times"`
@@ -128,6 +134,7 @@ func createEvent(c *gin.Context) {
 	event := models.Event{
 		Id:                       primitive.NewObjectID(),
 		OwnerId:                  ownerId,
+		OwnerName:                payload.OwnerName,
 		CreatorPosthogId:         payload.CreatorPosthogId,
 		Name:                     payload.Name,
 		Duration:                 payload.Duration,
@@ -149,15 +156,31 @@ func createEvent(c *gin.Context) {
 		NumResponses:             &numResponses,
 	}
 
-	// Generate short id
-	shortId := db.GenerateShortEventId(event.Id)
-	event.ShortId = &shortId
+	// Short id: use the custom slug if one was provided (and is free), otherwise
+	// generate a random one. Added by Jack de Haan, 2026 (meet fork of Timeful).
+	if payload.ShortId != nil && strings.TrimSpace(*payload.ShortId) != "" {
+		slug := slugify(*payload.ShortId)
+		if slug == "" {
+			c.JSON(http.StatusBadRequest, responses.Error{Error: "invalid-slug"})
+			return
+		}
+		if db.GetEventByShortId(slug) != nil {
+			c.JSON(http.StatusConflict, responses.Error{Error: "slug-taken"})
+			return
+		}
+		event.ShortId = &slug
+	} else {
+		shortId := db.GenerateShortEventId(event.Id)
+		event.ShortId = &shortId
+	}
 
 	// Schedule reminder emails if remindees array is not empty
 	if len(payload.Remindees) > 0 {
-		// Determine owner name
+		// Determine owner name — prefer the host name set on the poll.
 		var ownerName string
-		if signedIn {
+		if payload.OwnerName != nil && strings.TrimSpace(*payload.OwnerName) != "" {
+			ownerName = strings.TrimSpace(*payload.OwnerName)
+		} else if signedIn {
 			ownerName = user.FirstName
 		} else {
 			ownerName = "JdH"
@@ -802,10 +825,16 @@ func updateEventResponse(c *gin.Context) {
 		event.SignUpResponses[userIdString] = &response
 	}
 
+	// The operator's own availability (auto-filled from Mensa) is submitted under
+	// the poll's host name; don't notify them about their own response.
+	isOwnerResponse := utils.Coalesce(payload.Guest) &&
+		event.OwnerName != nil &&
+		payload.Name == strings.TrimSpace(*event.OwnerName)
+
 	// Notify the operator that someone responded (if enabled). Modified by Jack
 	// de Haan, 2026: routed through SMTP instead of Listmonk, and falls back to
 	// OPERATOR_EMAIL for Mensa-created events that have no owner user.
-	if (utils.Coalesce(event.NotificationsEnabled) || event.Type == models.GROUP) && !userHasResponded && userIdString != event.OwnerId.Hex() {
+	if (utils.Coalesce(event.NotificationsEnabled) || event.Type == models.GROUP) && !userHasResponded && userIdString != event.OwnerId.Hex() && !isOwnerResponse {
 		// Send email asynchronously
 		go func() {
 			// Recover from panics
@@ -816,12 +845,18 @@ func updateEventResponse(c *gin.Context) {
 			}()
 
 			// Recipient: the event owner, or the operator for owner-less events.
+			// Owner name: prefer the host name set on the poll.
 			creator := db.GetUserById(event.OwnerId.Hex())
 			recipient := emailsvc.OperatorEmail()
 			ownerName := ""
+			if event.OwnerName != nil {
+				ownerName = strings.TrimSpace(*event.OwnerName)
+			}
 			if creator != nil {
 				recipient = creator.Email
-				ownerName = creator.FirstName
+				if ownerName == "" {
+					ownerName = creator.FirstName
+				}
 			}
 			if recipient == "" {
 				return
@@ -850,9 +885,9 @@ func updateEventResponse(c *gin.Context) {
 		}()
 	}
 
-	// Send email after X responses
+	// Send email after X responses (not counting the operator's own auto-fill)
 	sendEmailAfterXResponses := utils.Coalesce(event.SendEmailAfterXResponses)
-	if sendEmailAfterXResponses > 0 && !userHasResponded && sendEmailAfterXResponses == len(eventResponses)+1 { // We add 1 because eventResponses is the old event responses before the current user is added
+	if sendEmailAfterXResponses > 0 && !userHasResponded && !isOwnerResponse && sendEmailAfterXResponses == len(eventResponses)+1 { // We add 1 because eventResponses is the old event responses before the current user is added
 		// Set SendEmailAfterXResponses variable to -1 to prevent additional emails from being sent
 		*event.SendEmailAfterXResponses = -1
 
@@ -866,12 +901,18 @@ func updateEventResponse(c *gin.Context) {
 			}()
 
 			// Recipient: the event owner, or the operator for owner-less events.
+			// Owner name: prefer the host name set on the poll.
 			creator := db.GetUserById(event.OwnerId.Hex())
 			recipient := emailsvc.OperatorEmail()
 			ownerName := ""
+			if event.OwnerName != nil {
+				ownerName = strings.TrimSpace(*event.OwnerName)
+			}
 			if creator != nil {
 				recipient = creator.Email
-				ownerName = creator.FirstName
+				if ownerName == "" {
+					ownerName = creator.FirstName
+				}
 			}
 			if recipient == "" {
 				return
@@ -1500,6 +1541,30 @@ func getResponsesMap(responses []models.EventResponse) map[string]*models.Respon
 		result[resp.UserId] = resp.Response
 	}
 	return result
+}
+
+// Added by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+// slugify normalises a user-provided custom slug: lowercase, runs of anything
+// that isn't [a-z0-9] collapse to a single hyphen, trimmed of leading/trailing
+// hyphens, capped at 64 chars. Returns "" when nothing usable remains.
+func slugify(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	lastHyphen := false
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastHyphen = false
+		} else if b.Len() > 0 && !lastHyphen {
+			b.WriteRune('-')
+			lastHyphen = true
+		}
+	}
+	slug := strings.Trim(b.String(), "-")
+	if len(slug) > 64 {
+		slug = strings.Trim(slug[:64], "-")
+	}
+	return slug
 }
 
 // Added by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.

@@ -42,10 +42,14 @@ type SignUpResponse struct {
 
 // Representation of an Event in the mongoDB database
 type Event struct {
-	Id          primitive.ObjectID `json:"_id" bson:"_id,omitempty"`
-	ShortId     *string            `json:"shortId" bson:"shortId,omitempty"`
-	OwnerId     primitive.ObjectID `json:"ownerId" bson:"ownerId,omitempty"`
-	Name        string             `json:"name" bson:"name,omitempty"`
+	Id      primitive.ObjectID `json:"_id" bson:"_id,omitempty"`
+	ShortId *string            `json:"shortId" bson:"shortId,omitempty"`
+	OwnerId primitive.ObjectID `json:"ownerId" bson:"ownerId,omitempty"`
+	// Display name of the poll's host (set at creation from Mensa). Used as the
+	// "owner" name in emails since Mensa-created events have no owner account.
+	// Added by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+	OwnerName   *string `json:"ownerName" bson:"ownerName,omitempty"`
+	Name        string  `json:"name" bson:"name,omitempty"`
 	Description *string            `json:"description" bson:"description,omitempty"`
 	IsArchived  *bool              `json:"isArchived" bson:"isArchived,omitempty"`
 	IsDeleted   *bool              `json:"isDeleted" bson:"isDeleted,omitempty"`
