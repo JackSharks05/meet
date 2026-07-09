@@ -1,6 +1,8 @@
 <template>
   <span>
-    <div v-if="event" class="tw-mt-8 tw-h-full">
+    <!-- Missing / deleted event → show the 404 page in place. -->
+    <PageNotFound v-if="notFound" />
+    <div v-else-if="event" class="tw-mt-8 tw-h-full">
       <!-- Mark availability option dialog -->
       <MarkAvailabilityDialog
         v-model="choiceDialog"
@@ -417,6 +419,7 @@ import InvitationDialog from "@/components/groups/InvitationDialog.vue"
 import HelpDialog from "@/components/HelpDialog.vue"
 import EventDescription from "@/components/event/EventDescription.vue"
 import FormerlyKnownAs from "@/components/FormerlyKnownAs.vue"
+import PageNotFound from "@/views/PageNotFound.vue"
 export default {
   name: "Event",
 
@@ -430,6 +433,7 @@ export default {
   },
 
   components: {
+    PageNotFound,
     GuestDialog,
     SignUpForSlotDialog,
     ScheduleOverlap,
@@ -457,6 +461,8 @@ export default {
     loading: true,
     calendarEventsMap: {},
     event: null,
+    // Set when the event id doesn't resolve (never created / deleted) → show 404.
+    notFound: false,
     scheduleOverlapComponent: null,
     scheduleOverlapComponentLoaded: false,
 
@@ -1659,8 +1665,10 @@ export default {
     } catch (err) {
       switch (err.error) {
         case errors.EventNotFound:
-          this.showError("The specified event does not exist!")
-          this.$router.replace({ name: "home" })
+          // Poll link points at a non-existent or deleted event → show the 404
+          // page in place (keeps the URL) rather than bouncing home.
+          this.notFound = true
+          this.loading = false
           return
       }
     }

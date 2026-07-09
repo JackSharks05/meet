@@ -4,6 +4,7 @@ package routes
 import (
 	"context"
 	"fmt"
+	"html"
 	"net/http"
 	"strings"
 	"time"
@@ -85,6 +86,14 @@ func createEvent(c *gin.Context) {
 		// Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
 		ShortId   *string `json:"shortId"`
 		OwnerName *string `json:"ownerName"`
+
+		// Rich invites: each can carry a greeting name + custom message appended
+		// to the invite. Preferred over the plain Remindees list when present.
+		Invites []struct {
+			Email        string `json:"email"`
+			GreetingName string `json:"greetingName"`
+			Message      string `json:"message"`
+		} `json:"invites"`
 
 		// Only for specific times for specific dates events
 		HasSpecificTimes *bool                `json:"hasSpecificTimes"`
@@ -174,9 +183,34 @@ func createEvent(c *gin.Context) {
 		event.ShortId = &shortId
 	}
 
-	// Schedule reminder emails if remindees array is not empty
-	if len(payload.Remindees) > 0 {
-		// Determine owner name — prefer the host name set on the poll.
+	// Build the invitee list: prefer the rich Invites (email + greeting + custom
+	// message); fall back to the plain Remindees email list for compatibility.
+	type invite struct {
+		email        string
+		greetingName string
+		message      string
+	}
+	invites := make([]invite, 0)
+	for _, inv := range payload.Invites {
+		if email := strings.TrimSpace(inv.Email); email != "" {
+			invites = append(invites, invite{
+				email:        email,
+				greetingName: strings.TrimSpace(inv.GreetingName),
+				message:      strings.TrimSpace(inv.Message),
+			})
+		}
+	}
+	for _, email := range payload.Remindees {
+		if email = strings.TrimSpace(email); email != "" {
+			invites = append(invites, invite{email: email})
+		}
+	}
+
+	// Email each invitee the poll link so they can add their availability.
+	// (Timeful scheduled these via Cloud Tasks; this fork sends immediately over
+	// SMTP. "Responded" is tracked so the operator can see who's left.)
+	if len(invites) > 0 {
+		// Owner name — prefer the host name set on the poll.
 		var ownerName string
 		if payload.OwnerName != nil && strings.TrimSpace(*payload.OwnerName) != "" {
 			ownerName = strings.TrimSpace(*payload.OwnerName)
@@ -186,22 +220,21 @@ func createEvent(c *gin.Context) {
 			ownerName = "JdH"
 		}
 
-		// Email each invitee the poll link so they can add their availability.
-		// (Timeful scheduled these via Cloud Tasks; this fork sends immediately
-		// over SMTP. "Responded" is tracked so the operator can see who's left.)
 		eventUrl := fmt.Sprintf("%s/e/%s", utils.GetBaseUrl(), event.GetId())
 		subject := fmt.Sprintf("%s wants your availability: %s", ownerName, payload.Name)
-		body := emailsvc.SimpleBody(
-			"",
-			fmt.Sprintf("%s please fill out your availability for <b>%s</b>. Can't wait to see you soon!!", ownerName, payload.Name),
-			eventUrl,
-			"Add your availability",
-		)
+		inviteLine := fmt.Sprintf("%s is inviting you to fill out your availability for <b>%s</b>.", ownerName, payload.Name)
+
 		remindees := make([]models.Remindee, 0)
-		for _, email := range payload.Remindees {
-			go emailsvc.Send(email, subject, body)
+		for _, inv := range invites {
+			// The invite line, then the operator's custom message (escaped) if any.
+			bodyHTML := inviteLine
+			if inv.message != "" {
+				bodyHTML += "<br><br>" + strings.ReplaceAll(html.EscapeString(inv.message), "\n", "<br>")
+			}
+			body := emailsvc.SimpleBody(inv.greetingName, bodyHTML, eventUrl, "Add your availability")
+			go emailsvc.Send(inv.email, subject, body)
 			remindees = append(remindees, models.Remindee{
-				Email:     email,
+				Email:     inv.email,
 				Responded: utils.FalsePtr(),
 			})
 		}

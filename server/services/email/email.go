@@ -85,7 +85,7 @@ func SimpleBody(greetingName, bodyHTML, url, ctaLabel string) string {
   <div style="font-size:22px;font-weight:700;letter-spacing:1px;margin-bottom:16px">meet with jdh</div>
   <p style="font-size:15px;line-height:1.6;margin:0 0 8px">%s,</p>
   <p style="font-size:15px;line-height:1.6;margin:0 0 20px">%s</p>
-  <a href="%s" style="display:inline-block;background:#621f6deb;color:#fe000051;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600">%s</a>
-  <p style="font-size:12px;color:#888;margin-top:24px">meet.jackdehaan.com — a private availability poll.</p>
+  <a href="%s" style="display:inline-block;background:#621f6deb;color:#fe0000;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600">%s</a>
+  <p style="font-size:12px;color:#888;margin-top:24px">meet.jackdehaan.com — a private availability poll (aka jack just being extra and not wanting to use when2meet).</p>
 </div>`, greeting, bodyHTML, url, ctaLabel)
 }

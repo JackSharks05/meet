@@ -40,8 +40,10 @@
         <!-- Event creation + account UI is operator-only (admin build). Public
              poll links are respond-only and show just the wordmark. -->
         <template v-if="isAdminBuild">
+          <!-- Show "Create an event" on every admin route except home (which has
+               its own "+ Create new" button) — including the main/landing page. -->
           <v-btn
-            v-if="$route.name === 'event'"
+            v-if="$route.name !== 'home'"
             id="top-right-create-btn"
             text
             @click="() => _createNew(true)"
