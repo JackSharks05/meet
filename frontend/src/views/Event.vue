@@ -2,6 +2,30 @@
   <span>
     <!-- Missing / deleted event → show the 404 page in place. -->
     <PageNotFound v-if="notFound" />
+    <!-- Backend unreachable (home server / meet-api down) → a themed notice in
+         place of a blank page, instead of silently rendering nothing. -->
+    <div
+      v-else-if="loadError"
+      class="tw-flex tw-min-h-[70vh] tw-flex-col tw-items-center tw-justify-center tw-px-6 tw-text-center"
+    >
+      <div class="tw-text-2xl tw-font-semibold tw-mb-3">
+        This poll is temporarily unavailable
+      </div>
+      <div class="tw-max-w-md tw-text-base tw-opacity-70 tw-mb-6">
+        meet is briefly unreachable — the server it runs on may be down. The poll
+        isn’t lost; please try again in a moment.
+      </div>
+      <div class="tw-flex tw-flex-wrap tw-items-center tw-justify-center tw-gap-4">
+        <v-btn color="primary" @click="retryLoad" :loading="loading">Try again</v-btn>
+        <a
+          href="https://status.jackdehaan.com"
+          target="_blank"
+          rel="noreferrer"
+          class="tw-underline tw-opacity-70 hover:tw-opacity-100"
+          >Check status ↗</a
+        >
+      </div>
+    </div>
     <div v-else-if="event" class="tw-mt-8 tw-h-full">
       <!-- Mark availability option dialog -->
       <MarkAvailabilityDialog
@@ -463,6 +487,9 @@ export default {
     event: null,
     // Set when the event id doesn't resolve (never created / deleted) → show 404.
     notFound: false,
+    // Set when the event fetch fails for any OTHER reason (backend down /
+    // network / 5xx) → show the "temporarily unavailable" notice, not a blank page.
+    loadError: false,
     scheduleOverlapComponent: null,
     scheduleOverlapComponentLoaded: false,
 
@@ -664,6 +691,31 @@ export default {
       let sanitizedId = this.eventId.replaceAll(".", "")
       this.event = await get(`/events/${sanitizedId}`)
       processEvent(this.event)
+    },
+
+    /** Retry a failed initial load (from the "temporarily unavailable" notice). */
+    async retryLoad() {
+      this.loading = true
+      try {
+        await this.refreshEvent()
+        this.loadError = false
+        // The event loaded — pull in the availability/profile follow-ups too.
+        Promise.allSettled([
+          this.fetchCalendarAvailabilities(),
+          this.fetchAuthUserCalendarEvents(),
+        ]).then(() => {
+          this.loading = false
+        })
+        get("/user/profile")
+          .then((authUser) => this.setAuthUser(authUser))
+          .catch(() => this.setAuthUser(null))
+      } catch (err) {
+        if (err.error === errors.EventNotFound) {
+          this.notFound = true
+          this.loadError = false
+        }
+        this.loading = false
+      }
     },
 
     setAvailabilityAutomatically(calendarType = calendarTypes.GOOGLE) {
@@ -1668,6 +1720,15 @@ export default {
           // Poll link points at a non-existent or deleted event → show the 404
           // page in place (keeps the URL) rather than bouncing home.
           this.notFound = true
+          this.loading = false
+          return
+        default:
+          // Anything else (backend down, network failure, 5xx from the tunnel
+          // fallback) means we couldn't reach meet — surface a themed notice
+          // instead of rendering nothing. Don't run the calendar/profile
+          // follow-ups below; there's no event to hang them off of.
+          console.error(err)
+          this.loadError = true
           this.loading = false
           return
       }

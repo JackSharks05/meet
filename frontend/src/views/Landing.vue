@@ -8,7 +8,7 @@
   <div class="jdh-landing">
     <div class="jdh-card jdh-landing__card">
       <h1 class="jdh-landing__title">meet with jack</h1>
-      <p class="jdh-landing__lede">exciting times ahead!</p>
+      <p class="jdh-landing__lede">excited to meet you soon!</p>
 
       <div class="jdh-landing__booking">
         <iframe
