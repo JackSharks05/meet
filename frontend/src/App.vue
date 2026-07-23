@@ -339,8 +339,9 @@ export default {
       return process.env.VUE_APP_ADMIN === "true"
     },
     showHeader() {
+      // The landing (default booking page) shows the header too — only the
+      // full-bleed auth + privacy-policy routes hide it.
       return (
-        this.$route.name !== "landing" &&
         this.$route.name !== "auth" &&
         this.$route.name !== "privacy-policy"
       )

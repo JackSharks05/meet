@@ -8,7 +8,7 @@
   <div class="jdh-landing">
     <div class="jdh-card jdh-landing__card">
       <h1 class="jdh-landing__title">meet with jack</h1>
-      <p class="jdh-landing__lede">excited to meet you soon!</p>
+      <p class="jdh-landing__lede">{{ lede }}</p>
 
       <div class="jdh-landing__booking">
         <iframe
@@ -33,8 +33,23 @@
 const DEFAULT_BOOKING_URL =
   "https://calendar.google.com/calendar/appointments/schedules/AcZssZ1O7q4a8cqz90Lla7qIxwwwbKldW6GYz4MslSQe3KMLJWag5XJ2J4Gxl5O2_A7SBuTBc5EJnH6W?gv=true"
 
+// Rotating landing subtitles — edit this list freely. One is shown at random on
+// each visit (so the greeting "rotates" across page loads).
+const LEDES = [
+  "excited to meet you soon!",
+  "let's find a time that works.",
+  "can't wait to hear your stories!",
+  "looking forward to it!",
+  "talk soon!",
+]
+
 export default {
   name: "Landing",
+  data() {
+    return {
+      lede: LEDES[Math.floor(Math.random() * LEDES.length)],
+    }
+  },
   computed: {
     bookingUrl() {
       return process.env.VUE_APP_BOOKING_URL || DEFAULT_BOOKING_URL
@@ -73,16 +88,26 @@ export default {
   margin: 0 0 18px;
 }
 .jdh-landing__booking {
+  /* Google's appointment embed stacks an organizer + description header above
+     the time list, which squashes the times. It's a cross-origin iframe (can't
+     restyle its DOM), so crop that band off the top: the iframe is taller than
+     its frame and shifted up by --crop, and the frame hides the overflow — so
+     only the "Select an appointment time" list shows. Bump --crop if Google
+     changes the header height or the description wraps to more/fewer lines. */
+  --booking-h: clamp(560px, 74vh, 820px);
+  --crop: 208px;
+  height: var(--booking-h);
+  overflow: hidden;
   background: #fff;
   border-radius: 14px;
-  overflow: hidden;
   border: 1px solid var(--jdh-outline);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 .jdh-landing__iframe {
   display: block;
   width: 100%;
-  height: clamp(520px, 70vh, 760px);
+  height: calc(var(--booking-h) + var(--crop));
+  margin-top: calc(-1 * var(--crop));
   border: 0;
 }
 .jdh-landing__sub {
@@ -115,6 +140,12 @@ export default {
 @media (max-width: 600px) {
   .jdh-landing__title {
     font-size: 36px;
+  }
+  /* The embed reflows to a single stacked column on narrow screens, so the
+     desktop crop offset no longer matches — show it uncropped there. */
+  .jdh-landing__booking {
+    --crop: 0px;
+    --booking-h: clamp(560px, 82vh, 900px);
   }
 }
 </style>
