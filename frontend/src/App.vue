@@ -31,9 +31,22 @@
       <div
         class="tw-relative tw-m-auto tw-flex tw-h-full tw-max-w-6xl tw-items-center tw-px-4"
       >
-        <router-link :to="{ name: 'home' }" class="jdh-wordmark">
-          meet with jdh
-        </router-link>
+        <!-- Unified jdh navbar (shared with status / files / code): the star
+             favicon links out to jackdehaan.com, the wordmark is the service
+             name (links to meet home), and the tag is "jack de haan". -->
+        <div class="tw-flex tw-items-center jdh-brand">
+          <a
+            href="https://www.jackdehaan.com"
+            aria-label="jack de haan"
+            class="jdh-mark"
+          >
+            <img src="/star.png" alt="jdh" width="28" height="28" />
+          </a>
+          <router-link :to="{ name: 'home' }" class="jdh-wordmark">
+            meet
+          </router-link>
+          <span class="jdh-tag">jack de haan</span>
+        </div>
 
         <v-spacer />
 
@@ -116,12 +129,31 @@ html {
   border-bottom: 1px solid var(--jdh-outline);
   z-index: 40;
 }
+.jdh-brand {
+  gap: 11px;
+}
+.jdh-mark {
+  display: inline-flex;
+  align-items: center;
+}
+.jdh-mark img {
+  display: block;
+  border-radius: 50%;
+  filter: drop-shadow(0 2px 8px rgba(254, 0, 0, 0.35));
+}
 .jdh-wordmark {
   font-size: 22px;
   font-weight: 600;
   letter-spacing: 0.5px;
   color: #fff !important;
   text-decoration: none;
+}
+.jdh-tag {
+  font-size: 13px;
+  letter-spacing: 0.6px;
+  opacity: 0.6;
+  text-transform: lowercase;
+  color: #fff;
 }
 
 .v-messages__message {
