@@ -12,7 +12,11 @@
     <div class="notFound__content">
       <div class="notFound__badge">jack de haan</div>
       <h1 class="notFound__title">404</h1>
-      <p class="notFound__subtitle">
+      <p v-if="subtitle" class="notFound__subtitle">
+        {{ subtitle }} head back
+        <router-link :to="{ name: 'landing' }">home</router-link>.
+      </p>
+      <p v-else class="notFound__subtitle">
         that page doesn't exist... just yet! head back
         <router-link :to="{ name: 'landing' }">home</router-link>.
       </p>
@@ -23,6 +27,12 @@
 <script>
 export default {
   name: "PageNotFound",
+
+  props: {
+    /** Overrides the default "that page doesn't exist" line (e.g. for a
+     *  deleted/expired poll, which is a different thing from a bad URL). */
+    subtitle: { type: String, default: "" },
+  },
 
   metaInfo: {
     title: "404 - meet",

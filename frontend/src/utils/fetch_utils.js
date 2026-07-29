@@ -64,6 +64,11 @@ export const fetchMethod = (method, route, body = {}) => {
         err.url = url;
         err.responseBody = text.slice(0, 2000);
         err.parsed = returnValue;
+        // Surface the backend's error code (e.g. "event-not-found") as `err.error`:
+        // callers switch on it to tell a missing resource from an unreachable server.
+        if (returnValue && typeof returnValue.error === "string") {
+          err.error = returnValue.error;
+        }
         err.headers = res.headers ? Object.fromEntries(res.headers.entries()) : undefined;
         throw err;
       }

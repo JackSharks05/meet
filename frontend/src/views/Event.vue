@@ -1,7 +1,11 @@
 <template>
   <span>
-    <!-- Missing / deleted event → show the 404 page in place. -->
-    <PageNotFound v-if="notFound" />
+    <!-- Missing / deleted event → 404 in place, worded for a poll (NOT a server
+         outage: the request reached meet, the poll just isn't there). -->
+    <PageNotFound
+      v-if="notFound"
+      subtitle="this poll has expired or doesn't exist — the link may be wrong, or its owner may have deleted it."
+    />
     <!-- Backend unreachable (home server / meet-api down) → a themed notice in
          place of a blank page, instead of silently rendering nothing. -->
     <div
