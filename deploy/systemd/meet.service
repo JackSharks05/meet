@@ -1,7 +1,13 @@
 # Added by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
-# Brings the meet Docker Compose stack up on boot and down on stop. The
-# containers themselves use `restart: unless-stopped`, but this unit guarantees
-# the stack is (re)created after a reboot even if the containers were removed.
+# Brings the meet Docker Compose stack up on boot and down on stop.
+#
+# A hard power-off can leave a container in Docker's "Dead" state, which
+# `docker compose up -d` will NOT recover on its own — so we clear stopped/dead
+# containers first (ExecStartPre) and retry on failure. The leading `-` on the
+# rm makes its own failure non-fatal.
+#
+#   ⚠️  NEVER add `-v` to `docker compose rm`/`down`. That deletes named volumes,
+#       and deploy_meet-mongo-data is the ONLY copy of your data.
 #
 # Install (edit paths/User if your checkout differs):
 #   sudo cp meet.service /etc/systemd/system/meet.service
@@ -20,7 +26,14 @@ Type=oneshot
 RemainAfterExit=yes
 User=jdh
 WorkingDirectory=/home/jdh/meet/deploy
-ExecStart=/usr/bin/docker compose up -d
+# Clear any stopped/dead containers first (the leading `-` ignores rm's own
+# failure). `rm -f` leaves running containers alone, so a healthy stack that
+# Docker already auto-started isn't disturbed.
+ExecStartPre=-/usr/bin/docker compose rm -f
+# Bring the stack up, retrying for transient "docker not ready yet" races.
+# NOTE: Restart= is not valid with Type=oneshot (systemd rejects the unit), so
+# the retry lives inside ExecStart instead.
+ExecStart=/bin/sh -c 'for i in 1 2 3 4 5; do /usr/bin/docker compose up -d && exit 0; echo "meet: compose up failed ($i/5), retrying in 15s"; sleep 15; done; exit 1'
 ExecStop=/usr/bin/docker compose down
 TimeoutStartSec=0
 

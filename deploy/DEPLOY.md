@@ -115,7 +115,9 @@ poll data is backed up off the box.
 # Docker daemon itself (containers use restart: unless-stopped, but Docker must run)
 sudo systemctl enable --now docker
 
-# meet compose stack as a unit (recreates the stack even if containers were removed)
+# meet compose stack as a unit. It clears stopped/dead containers before `up`
+# (a hard power-off leaves containers "Dead", which `up -d` won't recover) and
+# retries a few times for transient docker-not-ready races.
 sudo cp ~/meet/deploy/systemd/meet.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now meet.service
@@ -124,6 +126,9 @@ sudo systemctl enable --now meet.service
 # shortener + meet-api ingress) — confirm it's enabled:
 systemctl is-enabled cloudflared || sudo systemctl enable --now cloudflared
 ```
+
+> ⚠️ **Never** add `-v` to `docker compose rm`/`down` anywhere. That deletes named
+> volumes, and `deploy_meet-mongo-data` is the **only** copy of your data.
 
 **Tailscale Serve** (admin-web) persists across reboots because `--bg` writes the
 serve config, which `tailscaled` restores on start. Verify after a reboot with
@@ -135,35 +140,93 @@ Quick reboot test: `sudo reboot`, then from a tailnet device check
 
 ## 2. MongoDB backups
 
-`backup-mongo.sh` streams a gzipped `mongodump` out of the container to the host,
-prunes old archives, and can copy the latest offsite via rclone. A systemd timer
-runs it daily.
+`backup-mongo.sh` streams a gzipped `mongodump` out of the container, **verifies
+it** (non-empty *and* `gzip -t` passes — a failed `mongodump` no longer leaves an
+empty archive behind), backs up `deploy/.env`, prunes old files, writes a
+`last-success` heartbeat, and can copy offsite via rclone. A systemd timer runs
+it daily (`Persistent=true`, so a run missed while the box was off happens at
+next boot).
 
 ```bash
 # One-off (writes to /home/jdh/meet-backups by default):
 ~/meet/deploy/backup-mongo.sh
 
-# Schedule it daily at 03:30:
-sudo cp ~/meet/deploy/systemd/meet-backup.service ~/meet/deploy/systemd/meet-backup.timer /etc/systemd/system/
-#   → optionally set MEET_BACKUP_RCLONE_REMOTE / KEEP_DAYS in meet-backup.service first
+# Schedule it daily at 03:30 (+ the OnFailure alert unit):
+sudo cp ~/meet/deploy/systemd/meet-backup.service \
+        ~/meet/deploy/systemd/meet-backup-failed.service \
+        ~/meet/deploy/systemd/meet-backup.timer /etc/systemd/system/
+#   → set MEET_BACKUP_RCLONE_REMOTE / GPG passphrase / KEEP_DAYS in meet-backup.service first
 sudo systemctl daemon-reload
 sudo systemctl enable --now meet-backup.timer
 systemctl list-timers meet-backup.timer     # confirm next run
 ```
 
-**Offsite copy (recommended):** install `rclone`, run `rclone config` to add a
-remote (e.g. Google Drive as `gdrive`), then uncomment
-`Environment=MEET_BACKUP_RCLONE_REMOTE=gdrive:meet-backups` in
-`meet-backup.service`. Without this, backups only live on the same disk as the DB.
+### Config + offsite — do this before leaving it unattended
 
-**Restore** a backup:
+- **Config (`.env`) is part of the backup.** The Mongo dump alone can't restore a
+  working service — the secrets live in `deploy/.env`. The script copies it too:
+  - By default, a **local plaintext** copy (`meet-env-<stamp>.env`, `0600`) that is
+    **never** pushed offsite.
+  - Set `MEET_BACKUP_GPG_PASSPHRASE` (in `meet-backup.service`) to instead write an
+    **encrypted** `.env.gpg` that *is* eligible for the offsite copy. Store that
+    passphrase somewhere other than this server (a password manager).
+- **Offsite remote (do it):** local backups don't survive the disk/house they live
+  in dying. `rclone config` a remote (e.g. Google Drive as `gdrive`), then set
+  `Environment=MEET_BACKUP_RCLONE_REMOTE=gdrive:meet-backups` in `meet-backup.service`.
+
+### Is it actually working? (not just "did it run")
+
+```bash
+journalctl -u meet-backup -n 20            # every run logs; look for "backup OK"
+cat /home/jdh/meet-backups/last-success    # epoch of last VERIFIED backup
+# alert if that's stale, e.g.:
+test $(( $(date +%s) - $(cat /home/jdh/meet-backups/last-success) )) -lt 172800 \
+  && echo "backup fresh" || echo "backup STALE (>2 days)"
+```
+A failed backup marks the unit `failed` (`systemctl --failed`) and logs a
+high-priority line via `meet-backup-failed.service` (`journalctl -p err`).
+
+### Restoring (real recovery)
 
 ```bash
 cd ~/meet/deploy
+# 1) config first — you need the secrets to bring the stack up:
+#    plaintext:  cp /home/jdh/meet-backups/meet-env-<stamp>.env .env
+#    encrypted:  gpg -d /path/meet-env-<stamp>.env.gpg > .env   (then chmod 600 .env)
+docker compose up -d
+# 2) then the data (this WIPES the live meet DB and replaces it):
 docker compose exec -T mongo mongorestore --archive --gzip --drop \
   < /home/jdh/meet-backups/meet-YYYYMMDD-HHMMSS.archive.gz
 ```
 
-> If `mongodump` isn't found in the container, install the MongoDB Database Tools
-> in the image or run a one-off `mongo/mongo-tools` container joined to the compose
-> network — but the official `mongo:7` image ships the tools.
+### Prove a restore works (drill — do this once, then periodically)
+
+An untested backup isn't a backup. Restore into a **scratch** DB, without `--drop`,
+remapped so it never touches live data:
+
+```bash
+cd ~/meet/deploy
+docker compose exec -T mongo mongorestore --archive --gzip \
+  --nsFrom 'meet.*' --nsTo 'meet_restoretest.*' \
+  < /home/jdh/meet-backups/meet-YYYYMMDD-HHMMSS.archive.gz
+docker compose exec -T mongo mongosh --quiet --eval \
+  'db.getSiblingDB("meet_restoretest").getCollectionNames()'   # should list events, eventResponses, …
+docker compose exec -T mongo mongosh --quiet --eval \
+  'db.getSiblingDB("meet_restoretest").dropDatabase()'          # clean up
+```
+
+## 3. Housekeeping
+
+Container recreation leaves anonymous (bare-hash) volumes behind. Inspect before
+removing anything, and only prune **with meet running** so the named data volume
+`deploy_meet-mongo-data` is held and can't be swept:
+
+```bash
+docker volume ls                       # deploy_meet-mongo-data must be present
+docker volume ls -f dangling=true      # candidates (anonymous leftovers)
+docker compose up -d                   # ensure meet is up FIRST
+docker volume prune                    # removes only dangling volumes
+```
+
+> If `mongodump`/`mongorestore` aren't found in the container, the official
+> `mongo:7` image ships the tools — otherwise install the MongoDB Database Tools.

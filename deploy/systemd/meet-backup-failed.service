@@ -1,0 +1,10 @@
+# Added by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+# OnFailure hook for meet-backup.service — writes a loud, high-priority log line
+# so a failed backup is visible (journalctl -p err) instead of silent. Wire your
+# own notifier (ntfy/email/webhook) into ExecStart if you want a push alert.
+[Unit]
+Description=meet — backup FAILED alert
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/logger -t meet-backup -p user.err "meet backup FAILED — run journalctl -u meet-backup, check /home/jdh/meet-backups/last-success age and the offsite copy"

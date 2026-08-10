@@ -2,14 +2,16 @@
 # One-shot MongoDB backup, driven by meet-backup.timer. See backup-mongo.sh.
 #
 # Install:
-#   sudo cp meet-backup.service meet-backup.timer /etc/systemd/system/
+#   sudo cp meet-backup.service meet-backup-failed.service meet-backup.timer /etc/systemd/system/
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now meet-backup.timer
-# Set offsite/retention by editing the Environment= lines below.
+# Set offsite/retention/encryption by editing the Environment= lines below.
 [Unit]
 Description=meet — MongoDB backup
 Requires=docker.service
 After=docker.service
+# Log a high-priority marker if the backup fails (so it's visible, not silent).
+OnFailure=meet-backup-failed.service
 
 [Service]
 Type=oneshot
@@ -19,4 +21,6 @@ WorkingDirectory=/home/jdh/meet/deploy
 # Environment=MEET_BACKUP_DIR=/home/jdh/meet-backups
 # Environment=MEET_BACKUP_KEEP_DAYS=14
 # Environment=MEET_BACKUP_RCLONE_REMOTE=gdrive:meet-backups
+# Encrypt the .env config backup so it can go offsite safely:
+# Environment=MEET_BACKUP_GPG_PASSPHRASE=change-me-long-random
 ExecStart=/home/jdh/meet/deploy/backup-mongo.sh

@@ -4,7 +4,7 @@
          outage: the request reached meet, the poll just isn't there). -->
     <PageNotFound
       v-if="notFound"
-      subtitle="this poll has expired or doesn't exist — the link may be wrong, or its owner may have deleted it."
+      subtitle="this poll has expired or doesn't exist — the link may be wrong, or it may have been deleted."
     />
     <!-- Backend unreachable (home server / meet-api down) → a themed notice in
          place of a blank page, instead of silently rendering nothing. -->
@@ -12,15 +12,19 @@
       v-else-if="loadError"
       class="tw-flex tw-min-h-[70vh] tw-flex-col tw-items-center tw-justify-center tw-px-6 tw-text-center"
     >
-      <div class="tw-text-2xl tw-font-semibold tw-mb-3">
+      <div class="tw-mb-3 tw-text-2xl tw-font-semibold">
         This poll is temporarily unavailable
       </div>
-      <div class="tw-max-w-md tw-text-base tw-opacity-70 tw-mb-6">
-        meet is briefly unreachable — the server it runs on may be down. The poll
-        isn’t lost; please try again in a moment.
+      <div class="tw-mb-6 tw-max-w-md tw-text-base tw-opacity-70">
+        meet is briefly unreachable — the server it runs on may be down. The
+        poll isn’t lost; please try again in a moment.
       </div>
-      <div class="tw-flex tw-flex-wrap tw-items-center tw-justify-center tw-gap-4">
-        <v-btn color="primary" @click="retryLoad" :loading="loading">Try again</v-btn>
+      <div
+        class="tw-flex tw-flex-wrap tw-items-center tw-justify-center tw-gap-4"
+      >
+        <v-btn color="primary" @click="retryLoad" :loading="loading"
+          >Try again</v-btn
+        >
         <a
           href="https://status.jackdehaan.com"
           target="_blank"

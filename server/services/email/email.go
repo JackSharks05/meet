@@ -10,12 +10,25 @@ package email
 
 import (
 	"fmt"
+	"net/mail"
 	"net/smtp"
 	"os"
 	"strings"
 
 	"schej.it/server/logger"
 )
+
+// FromDisplayName resolves the "From" display name shown in recipients' inboxes:
+// a per-send override, else the SMTP_FROM_NAME env, else a sensible default.
+func FromDisplayName(override string) string {
+	if name := strings.TrimSpace(override); name != "" {
+		return name
+	}
+	if name := strings.TrimSpace(os.Getenv("SMTP_FROM_NAME")); name != "" {
+		return name
+	}
+	return "Jack de Haan"
+}
 
 // Enabled reports whether SMTP delivery is configured.
 func Enabled() bool {
@@ -30,10 +43,12 @@ func OperatorEmail() string {
 	return strings.TrimSpace(os.Getenv("OPERATOR_EMAIL"))
 }
 
-// Send delivers a single HTML email. It is a no-op (with no error) when SMTP is
-// not configured or the recipient is empty, and it never panics — send failures
-// are logged, since email is best-effort and must not break a response.
-func Send(to, subject, htmlBody string) {
+// Send delivers a single HTML email. fromName sets the "From" display name
+// shown in the recipient's inbox (empty → the configured default). It is a no-op
+// (with no error) when SMTP is not configured or the recipient is empty, and it
+// never panics — send failures are logged, since email is best-effort and must
+// not break a response.
+func Send(fromName, to, subject, htmlBody string) {
 	if !Enabled() || strings.TrimSpace(to) == "" {
 		return
 	}
@@ -50,8 +65,13 @@ func Send(to, subject, htmlBody string) {
 		from = user
 	}
 
+	// The header From carries a display name ("Jack de Haan" <meet@…>); the SMTP
+	// envelope sender below stays the bare address. mail.Address handles the
+	// RFC-correct quoting/encoding of the name.
+	fromHeader := (&mail.Address{Name: FromDisplayName(fromName), Address: from}).String()
+
 	headers := map[string]string{
-		"From":         from,
+		"From":         fromHeader,
 		"To":           to,
 		"Subject":      subject,
 		"MIME-Version": "1.0",

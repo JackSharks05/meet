@@ -38,6 +38,7 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Jack de Haan}
     ports:
       # localhost only → Cloudflare Tunnel forwards meet-api.jackdehaan.com here
       - "127.0.0.1:3002:3002"
@@ -77,6 +78,7 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Jack de Haan}
     ports:
       # localhost only → admin API (also proxied same-origin by admin-web below)
       - "127.0.0.1:3003:3002"

@@ -35,10 +35,12 @@ import (
 func InitEvents(router *gin.RouterGroup, admin bool) {
 	eventRouter := router.Group("/events")
 
-	// Respondent-facing routes (public + admin)
-	eventRouter.GET("/:eventId", getEvent)
+	// Respondent-facing routes (public + admin). getEvent/updateEventResponse take
+	// the `admin` flag so archived polls 404 on the public listener but stay live
+	// on the admin/tailnet one. Added by Jack de Haan, 2026 (meet fork of Timeful).
+	eventRouter.GET("/:eventId", func(c *gin.Context) { getEvent(c, admin) })
 	eventRouter.GET("/:eventId/responses", getResponses)
-	eventRouter.POST("/:eventId/response", updateEventResponse)
+	eventRouter.POST("/:eventId/response", func(c *gin.Context) { updateEventResponse(c, admin) })
 	eventRouter.DELETE("/:eventId/response", deleteEventResponse)
 	eventRouter.POST("/:eventId/rename-user", renameUser)
 	eventRouter.POST("/:eventId/responded", userResponded)
@@ -64,7 +66,9 @@ func InitEvents(router *gin.RouterGroup, admin bool) {
 	eventRouter.POST("/:eventId/decline", middleware.AuthRequired(), declineInvite)
 	eventRouter.GET("/:eventId/calendar-availabilities", middleware.AuthRequired(), getCalendarAvailabilities)
 	eventRouter.POST("/:eventId/duplicate", middleware.AuthRequired(), duplicateEvent)
-	eventRouter.POST("/:eventId/archive", middleware.AuthRequired(), archiveEvent)
+	// Archive is auth-free on the tailnet (like list/delete) — renames the slug to
+	// free the original and hides the poll from the public listener.
+	eventRouter.POST("/:eventId/archive", archiveOperatorEvent)
 }
 
 // @Summary Creates a new event
@@ -82,10 +86,11 @@ func createEvent(c *gin.Context) {
 		Dates    []primitive.DateTime `json:"dates" binding:"required"`
 		Type     models.EventType     `json:"type" binding:"required"`
 
-		// Optional custom slug (like a shortlink) + host display name. Added by
-		// Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
-		ShortId   *string `json:"shortId"`
-		OwnerName *string `json:"ownerName"`
+		// Optional custom slug (like a shortlink) + host display name + email
+		// "From" name. Added by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+		ShortId    *string `json:"shortId"`
+		OwnerName  *string `json:"ownerName"`
+		SenderName *string `json:"senderName"`
 
 		// Rich invites: each can carry a greeting name + custom message appended
 		// to the invite. Preferred over the plain Remindees list when present.
@@ -144,6 +149,7 @@ func createEvent(c *gin.Context) {
 		Id:                       primitive.NewObjectID(),
 		OwnerId:                  ownerId,
 		OwnerName:                payload.OwnerName,
+		SenderName:               payload.SenderName,
 		CreatorPosthogId:         payload.CreatorPosthogId,
 		Name:                     payload.Name,
 		Duration:                 payload.Duration,
@@ -223,6 +229,7 @@ func createEvent(c *gin.Context) {
 		eventUrl := fmt.Sprintf("%s/e/%s", utils.GetBaseUrl(), event.GetId())
 		subject := fmt.Sprintf("%s wants your availability: %s", ownerName, payload.Name)
 		inviteLine := fmt.Sprintf("%s is inviting you to fill out your availability for <b>%s</b>.", ownerName, payload.Name)
+		senderName := utils.Coalesce(payload.SenderName)
 
 		remindees := make([]models.Remindee, 0)
 		for _, inv := range invites {
@@ -232,7 +239,7 @@ func createEvent(c *gin.Context) {
 				bodyHTML += "<br><br>" + strings.ReplaceAll(html.EscapeString(inv.message), "\n", "<br>")
 			}
 			body := emailsvc.SimpleBody(inv.greetingName, bodyHTML, eventUrl, "Add your availability")
-			go emailsvc.Send(inv.email, subject, body)
+			go emailsvc.Send(senderName, inv.email, subject, body)
 			remindees = append(remindees, models.Remindee{
 				Email:     inv.email,
 				Responded: utils.FalsePtr(),
@@ -540,11 +547,18 @@ func editEvent(c *gin.Context) {
 // @Param eventId path string true "Event ID"
 // @Success 200 {object} models.Event
 // @Router /events/{eventId} [get]
-func getEvent(c *gin.Context) {
+func getEvent(c *gin.Context, admin bool) {
 	eventId := c.Param("eventId")
 	event := db.GetEventByEitherId(eventId)
 
 	if event == nil {
+		c.JSON(http.StatusNotFound, responses.Error{Error: errs.EventNotFound})
+		return
+	}
+	// Archived polls are hidden from the public listener (their public link dies)
+	// but remain visible on the admin/tailnet listener for historical reference.
+	// Modified by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+	if utils.Coalesce(event.IsArchived) && !admin {
 		c.JSON(http.StatusNotFound, responses.Error{Error: errs.EventNotFound})
 		return
 	}
@@ -684,7 +698,7 @@ func getResponses(c *gin.Context) {
 // @Param payload body object{availability=[]string,ifNeeded=[]string,guest=bool,name=string,useCalendarAvailability=bool,enabledCalendars=map[string][]string,manualAvailability=map[string][]string,calendarOptions=models.CalendarOptions,signUpBlockIds=[]string} true "Object containing info about the event response to update"
 // @Success 200
 // @Router /events/{eventId}/response [post]
-func updateEventResponse(c *gin.Context) {
+func updateEventResponse(c *gin.Context, admin bool) {
 	payload := struct {
 		Availability []primitive.DateTime `json:"availability"`
 		IfNeeded     []primitive.DateTime `json:"ifNeeded"`
@@ -710,6 +724,11 @@ func updateEventResponse(c *gin.Context) {
 	eventId := c.Param("eventId")
 	event := db.GetEventByEitherId(eventId)
 	if event == nil {
+		c.JSON(http.StatusNotFound, responses.Error{Error: errs.EventNotFound})
+		return
+	}
+	// Archived polls reject responses on the public listener (their link is dead).
+	if utils.Coalesce(event.IsArchived) && !admin {
 		c.JSON(http.StatusNotFound, responses.Error{Error: errs.EventNotFound})
 		return
 	}
@@ -914,7 +933,7 @@ func updateEventResponse(c *gin.Context) {
 				eventUrl,
 				"View responses",
 			)
-			emailsvc.Send(recipient, subject, body)
+			emailsvc.Send(utils.Coalesce(event.SenderName), recipient, subject, body)
 		}()
 	}
 
@@ -961,7 +980,7 @@ func updateEventResponse(c *gin.Context) {
 				eventUrl,
 				"View responses",
 			)
-			emailsvc.Send(recipient, subject, body)
+			emailsvc.Send(utils.Coalesce(event.SenderName), recipient, subject, body)
 		}()
 	}
 
@@ -1650,6 +1669,7 @@ func listOperatorEvents(c *gin.Context) {
 		NotificationsEnabled     bool                 `json:"notificationsEnabled"`
 		CollectEmails            bool                 `json:"collectEmails"`
 		BlindAvailabilityEnabled bool                 `json:"blindAvailabilityEnabled"`
+		Archived                 bool                 `json:"archived"`
 	}
 
 	out := make([]item, 0, len(events))
@@ -1676,6 +1696,7 @@ func listOperatorEvents(c *gin.Context) {
 			NotificationsEnabled:     utils.Coalesce(e.NotificationsEnabled),
 			CollectEmails:            utils.Coalesce(e.CollectEmails),
 			BlindAvailabilityEnabled: utils.Coalesce(e.BlindAvailabilityEnabled),
+			Archived:                 utils.Coalesce(e.IsArchived),
 		})
 	}
 
@@ -1703,4 +1724,44 @@ func deleteOperatorEvent(c *gin.Context) {
 	}
 
 	c.Status(http.StatusOK)
+}
+
+// archiveOperatorEvent archives an operator (owner-less) poll: it hides the poll
+// from the public listener (its public link 404s) while keeping it live on the
+// admin/tailnet listener, and renames its slug to "<slug>_archiveN" so the
+// original slug is freed for a new poll. Auth-free on the tailnet-only admin
+// listener. Added by Jack de Haan, 2026 (meet fork of Timeful). See NOTICE.
+func archiveOperatorEvent(c *gin.Context) {
+	eventId := c.Param("eventId")
+	event := db.GetEventByEitherId(eventId)
+	if event == nil {
+		c.JSON(http.StatusNotFound, responses.Error{Error: errs.EventNotFound})
+		return
+	}
+	if event.OwnerId != primitive.NilObjectID {
+		c.JSON(http.StatusForbidden, responses.Error{Error: errs.UserNotEventOwner})
+		return
+	}
+
+	newSlug := freeArchiveSlug(event.GetId())
+	if _, err := db.EventsCollection.UpdateByID(context.Background(), event.Id, bson.M{
+		"$set": bson.M{
+			"isArchived": true,
+			"shortId":    newSlug,
+		},
+	}); err != nil {
+		logger.StdErr.Panicln(err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"shortId": newSlug})
+}
+
+// freeArchiveSlug returns the first available "<base>_archiveN" slug (N from 1).
+func freeArchiveSlug(base string) string {
+	for n := 1; ; n++ {
+		candidate := fmt.Sprintf("%s_archive%d", base, n)
+		if db.GetEventByShortId(candidate) == nil {
+			return candidate
+		}
+	}
 }
